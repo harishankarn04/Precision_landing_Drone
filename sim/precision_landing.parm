@@ -1,0 +1,27 @@
+# Precision-landing parameters for SITL.
+# Loaded at boot via --defaults so PLND_ENABLED is set before the backend is
+# constructed. Setting it on a already-running autopilot silently does nothing.
+
+PLND_ENABLED     1     # enable-flag: must be set at BOOT, not at runtime
+PLND_TYPE        1     # 1 = companion computer over MAVLink LANDING_TARGET
+PLND_EST_TYPE    0     # 0 = raw sensor
+PLND_ALT_MAX     8     # ignore the target above this height (m)
+PLND_ALT_MIN     0.75  # stop correcting below this height (m)
+
+SERIAL1_PROTOCOL 2     # MAVLink2 on SERIAL1 (TCP 5762) = our companion-computer link
+
+LAND_SPEED       50    # cm/s. Thesis uses 30 on hardware; 50 keeps the demo brisk
+
+# ArduPilot arming-check bug in ArduPilot/libraries/SITL/examples/Webots_Python/params/iris.parm:
+# that file sets ATC_ANG_RLL_P/PIT_P = 0.5 but leaves ACRO_BAL_ROLL/PITCH at their
+# default of 1.0. AP_Arming_Copter.cpp requires ACRO_BAL_ROLL/PITCH <= ATC_ANG_RLL/PIT_P,
+# so arming fails every time with "PreArm: Check ACRO_BAL_ROLL/PITCH". We don't use ACRO
+# or SPORT mode, so zeroing these is safe and has no effect on GUIDED/LAND flight.
+ACRO_BAL_ROLL    0
+ACRO_BAL_PITCH   0
+
+# Same file, same problem: ATC_RAT_RLL_I/PIT_I = 0 there, but current ArduPilot
+# requires each rate-PID I-gain > 0 (AC_AttitudeControl.cpp). Small value in
+# keeping with iris.parm's own (unusually soft) P-gains of 0.05.
+ATC_RAT_RLL_I    0.05
+ATC_RAT_PIT_I    0.05

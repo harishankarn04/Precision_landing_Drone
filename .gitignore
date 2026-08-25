@@ -1,0 +1,45 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# macOS / editors
+.DS_Store
+.vscode/
+.idea/
+
+# Personal Claude Code config — do NOT commit.
+# Contains this machine's permission mode; teammates set their own.
+.claude/settings.local.json
+
+# Simulation & flight artefacts — large, regenerable, or machine-specific
+logs/**/*.BIN
+logs/**/*.bin
+logs/**/*.tlog
+logs/**/*.tlog.raw
+logs/**/*.mp4
+logs/**/*.avi
+*.bag
+eeprom.bin
+mav.parm
+sim/out/
+sim/generated/
+
+# Build output
+build/
+*.so
+*.o
+
+# Keep the directory structure even when empty
+!**/.gitkeep
+
+# ROS 2 colcon output
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+sim/.sitl_run/
+sim/.sitl_webots_run/

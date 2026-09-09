@@ -138,7 +138,10 @@ Inspected 2026-08-14. Repo `engcang/ROLAND`, 24 stars, **last pushed 2023-07-17*
 **ROS 1** (Noetic era), **Gazebo Classic**, **PX4-SITL**, `iris` drone + `jackal` UGV.
 
 ⚠️ **Every layer of that stack is now end-of-life:** ROS 1 Noetic (EOL May 2025), Gazebo
-Classic (EOL Jan 2025), Ubuntu 20.04 (EOL Apr 2025). And **PX4 ≠ our ArduPilot hardware.**
+Classic (EOL Jan 2025), Ubuntu 20.04 (EOL Apr 2025). Our own autopilot choice briefly
+matched PX4 (2026-08-26–2026-09-09) but has reverted to ArduPilot (`CLAUDE.md` §0b) — so
+PX4 in this repo is back to being someone else's autopilot, on top of everything *around*
+it (ROS 1, Gazebo Classic, the ancient PX4-SITL version it pins) already being obsolete.
 
 **Do not build your project on top of this repo.** Mine it for parts.
 
@@ -152,7 +155,7 @@ Classic (EOL Jan 2025), Ubuntu 20.04 (EOL Apr 2025). And **PX4 ≠ our ArduPilot
 | 🟡 Tag position publisher plugin | `gazebosensorplugins/src/TagPosPublisherPlugin.cpp` | Ground-truth publisher; useful pattern for our sim |
 | 🟡 Jackal UGV Gazebo model | `jackal_package_for_gazebo/` | A ready moving platform; URDF/xacro ports reasonably |
 | 🟡 Skid-steer drive plugin | `gazebosensorplugins/src/CustomSkidSteerDrive.cpp` | Encoder-odometry source for the platform |
-| 🔴 VINS-Fusion (vendored submodule) | `VINS-Fusion/` | Heavy stereo VIO. **We almost certainly don't need this** — ArduPilot's own EKF3 + GPS/optical-flow covers `Δp_uav`. Skip. |
+| 🔴 VINS-Fusion (vendored submodule) | `VINS-Fusion/` | Heavy stereo VIO. **We almost certainly don't need this** — ArduPilot's own EKF3 + GPS/optical-flow should cover `Δp_uav`. Skip. |
 | 🔴 YOLOv4-tiny-3l + weights | `ekf_landing/scripts/*.cfg`, `*.weights`, `ros_opencv_dnn.py` | Markerless detection. Contradicts our marker-based approach and needs GPU-class compute. **Skip unless we deliberately go markerless.** |
 | 🔴 `rosmsgs` submodule | `valentinbarral/rosmsgs` | UWB ranging message definitions (ROS 1). Reimplement as a small ROS 2 msg package. |
 
@@ -167,12 +170,12 @@ regardless. Vendored VINS-Fusion carries its own (GPL-family) licence — anothe
 | ROLAND component | Our decision | Why |
 |---|---|---|
 | YOLOv4-tiny markerless detection | **Replace** with the senior's multi-scale AprilTag fusion | We already have it, it's more accurate, it runs on a Pi 4, and it gives *orientation* (which YOLO+centroid does not). Also gives us a contribution ROLAND lacks. |
-| VIO (VINS-Stereo) for `Δp_uav` | **Replace** with ArduPilot EKF3 (GPS + baro + optical flow via the 3901-L0X we already own) | Far less compute; already flight-proven; no extra camera |
+| VIO (VINS-Stereo) for `Δp_uav` | **Replace** with ArduPilot's own EKF3 (GPS + baro + optical flow via the 3901-L0X we already own) | Far less compute; already flight-proven; no extra camera |
 | Wheel encoder for `Δp_target` | **Depends on platform** — if we build an RC-car platform, add encoders or a GPS+telemetry downlink | Needed for the velocity feed-forward term. Alternative: estimate platform velocity purely from the vision velocity estimator the senior already wrote |
 | **UWB for out-of-FoV ranging** | **Port** — this is ROLAND's core contribution and the honest reading of our "Beacon-Based" title | See `06-open-questions.md` Q3 for module choice |
 | EKF structure (§2) | **Port and reimplement** | Directly addresses the senior's future-work item L7 |
-| Landing controller (§3) | **Adapt.** ArduPilot's LAND + PLND already does the descent; ROLAND's `V_z ∝ (T_xy − ‖e_xy‖)` slow-down and the tracking/landing state machine can be layered on top via GUIDED-mode velocity setpoints, or approximated with `PLND_*` params | Don't rewrite ArduPilot's controller — ride on it |
-| PX4 / MAVROS | **Replace** with ArduPilot + MAVLink/`pymavlink` (or `mavros` on ROS 2 if we want ROS) | Our hardware is ArduPilot |
+| Landing controller (§3) | **Adapt.** ArduPilot has its own precision-landing handling (`PLND_*`, LAND mode) rather than PX4's offboard-setpoint style; ROLAND's `V_z ∝ (T_xy − ‖e_xy‖)` slow-down and the tracking/landing state machine are portable *ideas* but the integration point is different on ArduPilot — work out the mapping when we reach this stage, per `CLAUDE.md` §7 items 0–2c | Don't rewrite the autopilot's controller — ride on it, same principle ROLAND used, different firmware |
+| PX4 / MAVROS | **Don't keep as-is.** ROLAND's stack is PX4; ours is ArduPilot again (`CLAUDE.md` §0b) — its `mavros`/PX4-ROS2-interface plumbing is a reference for *how* to wire ROS 2 to an autopilot, not something to reuse directly. ArduPilot's own MAVLink/`LANDING_TARGET` path (§7 of `CLAUDE.md`) is the actual integration point | Our hardware is ArduPilot, not PX4 |
 
 **Net:** we keep ROLAND's *estimator and mission architecture*, and substitute our own,
 stronger perception front-end. That's a clean, defensible contribution statement.

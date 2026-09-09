@@ -50,8 +50,8 @@ Our title says **Beacon-Based**. The system has no beacon. Options:
 
 | Option | Pros | Cons |
 |---|---|---|
-| **UWB** (DWM1001 / DW3000-class) | Matches ROLAND exactly; works when the marker is out of FOV or occluded; gives true range; genuinely novel on an ArduPilot platform | Most work: hardware, firmware, ranging protocol, EKF integration, calibration. ROLAND's Gazebo plugin needs porting to Harmonic |
-| **IR-Lock / IR beacon** | Plug-and-play in ArduPilot (`PLND_TYPE=2`); literally designed for this | Short range; sunlight-sensitive; almost no research novelty; not really a *fusion* contribution |
+| **UWB** (DWM1001 / DW3000-class) | Matches ROLAND's sensing exactly (autopilot choice diverges again — ROLAND is PX4, we're ArduPilot); works when the marker is out of FOV or occluded; gives true range | Most work: hardware, firmware, ranging protocol, EKF integration, calibration. ROLAND's Gazebo plugin needs porting to Harmonic |
+| **IR-Lock / IR beacon** | Simple, purpose-built for precision landing; ArduPilot has native support via `PLND_TYPE=2` | Short range; sunlight-sensitive; little research novelty |
 | **Active LED / vision beacon** | Cheap; helps at night and in low light; still uses the existing camera | Still FOV-limited — doesn't solve ROLAND's problem (b) |
 | **Reinterpret "beacon" = the AprilTag board** | Zero new hardware; the title is arguably already satisfied | Weak; loses the whole out-of-FOV contribution; examiners may well push back |
 | **BLE AoA / RSSI** | Cheap modules | Too imprecise for landing |
@@ -107,10 +107,13 @@ Note R3 alone already exceeds the senior's thesis. Do not skip ahead to R6.
 - Teammate: laptop with **NVIDIA ~GTX/RTX 1660-class** GPU (confirm exact model)
 - **MATLAB access for all three**
 
-**Implications:** Tier 1 (Ubuntu 24.04 + Gazebo Harmonic + ArduPilot SITL) is fully
-viable on the 4090 machine with real GPU rendering — no software-rendering penalty, no
-disk pressure on the Mac. Run it there, natively dual-boot or WSL2, not in a VM on the M1.
-MATLAB is available for the EKF-design side channel. See `03-simulation-plan.md`.
+**Implications:** the 4090 machine is the obvious choice for real-GPU Gazebo rendering
+(no software-rendering penalty, no disk pressure on the Mac) whenever we're at that stage.
+Stack changed 2026-08-26 to Gazebo+ROS2+PX4, then reverted 2026-09-09 to Gazebo+ArduPilot
+with ROS 2 downgraded to an open question (`CLAUDE.md` §0/§0b, Q11) — the original tiered
+ArduPilot/Webots plan this note pointed at is gone (Webots specifically, not ArduPilot);
+see `03-simulation-plan.md` for the current (intentionally undecided-in-detail) plan.
+MATLAB is still available for the EKF-design side channel.
 
 **Still open:** exact model of the "1660" GPU · any motion-capture / total station on
 campus for hardware ground truth.
@@ -155,6 +158,37 @@ not optional.
 Not needed until hardware. Parts will be **salvaged** where possible, and a working
 simulation is the argument for spending on the rest. Revisit with the BOM notes in
 `04-roadmap-checklist.md`.
+
+**Answer:** _____
+
+---
+
+### Q11 🟡 Is ROS 2 actually required, or was that a loose suggestion?
+`CLAUDE.md` records ROS 2 as "needed — professor's requirement," but that's a flat
+statement with no elaboration on what she actually wants (a specific deliverable? a
+component we must use? or a loose suggestion given the "Robotics & Autonomous Systems"
+domain?). Nobody currently knows the answer, including Hari (2026-09-09).
+
+**Technical finding: nothing in the pipeline actually requires ROS 2.**
+
+| Link in the chain | Needs ROS 2? | What it actually uses |
+|---|---|---|
+| ArduPilot SITL ↔ Gazebo physics | ❌ No | `ardupilot_gazebo` plugin talks to Gazebo directly |
+| Our perception pipeline ↔ ArduPilot | ❌ No | MAVLink via `pymavlink` — already the plan |
+| Camera frames out of Gazebo | ⚠️ Only via the standard route | `ros_gz_bridge` needs ROS 2, but Gazebo's own `gz-transport` Python API can subscribe to the camera topic directly, no ROS 2 |
+| QGroundControl ↔ ArduPilot | ❌ No | MAVLink, standalone |
+
+A fully ROS2-free stack — Gazebo (`gz-transport` for the camera feed) + ArduPilot SITL +
+our `pymavlink` pipeline + QGroundControl — is real and simpler than adding ROS 2 for no
+technical reason.
+
+**Recommendation:** default to building **ROS2-free**, using `gz-transport` directly for
+the Gazebo camera bridge (matches Hari's YAGNI instruction — don't add ROS 2 until
+something actually needs it). Confirm the actual scope of the professor's requirement with
+Dr. Kochuvila before Stage 3 (Gazebo) starts, since that's the first point ROS 2 would
+matter either way. If she confirms it's mandatory, swapping `gz-transport` for
+`ros_gz_bridge` at that point is a contained change — nothing upstream (the
+`pymavlink` pipeline, QGroundControl) needs to change either way.
 
 **Answer:** _____
 

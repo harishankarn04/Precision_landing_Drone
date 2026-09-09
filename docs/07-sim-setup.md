@@ -14,7 +14,7 @@ lands itself in simulation. See `CLAUDE.md` §4.
 |---|---|---|---|---|
 | **1** | A simulated drone flies, you can command it, you understand ArduPilot's modes and parameters | 🖥️ Mac, native | ❌ | ❌ |
 | **2** | ⭐ **The drone lands itself on the AprilTag board** — full perception pipeline, closed loop | 🖥️ Mac, native | ❌ | ❌ |
-| **3** | Same thing, but with real rendered imagery and real physics | 🐧 Linux (Mac VM for dev · friend's GPU for speed) | ✅ | ✅ |
+| **3** | Same thing, but with real rendered imagery and real physics | 🐧 Linux (Parallels VM on Hari's Mac for dev · friend's GPU for speed) | ✅ | ✅ |
 | **4** | Beacon (UWB) fused in — target still found when the marker is hidden | 🐧 Linux | ✅ | ✅ |
 | **5** | Landing on a *moving* platform | 🐧 Linux | ✅ | ✅ |
 | — | *then* hardware, salvaging parts | | | |
@@ -36,7 +36,7 @@ zero understanding of the actual problem.
 | **ArduPilot SITL** | *Software In The Loop.* The **real ArduCopter firmware**, compiled for your Mac instead of a flight controller chip. Same code that would fly the real drone. It simulates the physics itself |
 | **MAVLink** | The protocol autopilots speak. Every message (`LANDING_TARGET`, `HEARTBEAT`, …) goes over it |
 | **MAVProxy** | A command-line ground station. Type `mode GUIDED`, `arm throttle`, `takeoff 10` |
-| **QGroundControl** | A graphical ground station — map, parameter editor, flight modes. Nicer for browsing the ~1200 ArduPilot parameters |
+| **QGroundControl** | A graphical ground station — map, parameter editor, flight modes. Nicer for browsing the ~1200 ArduPilot parameters. **GCS of record for this project** (decided 2026-09-09 — cross-platform, unlike Mission Planner which is Windows-only) |
 | **pymavlink** | The Python library for speaking MAVLink. Our pipeline uses this to send `LANDING_TARGET` |
 
 Mental model:
@@ -196,33 +196,74 @@ Components to build, in order:
 LAND, and touches down within a few centimetres of the board centre — repeatably, over 20+
 scripted runs, with a mean/σ you can put in the report.
 
+> 💡 **Future idea, not yet started (2026-09-09):** Stages 1–2 are exactly the part of this
+> project that's headless-friendly — ArduPilot SITL + Python, no Gazebo, no GPU, no GUI.
+> Once this code exists, it's a good candidate for a GitHub Actions workflow that runs the
+> SITL + synthetic-camera landing campaign on every push, so a `git pull` on the Linux side
+> starts from already-validated code rather than something that might be broken. Deliberately
+> **not** in scope: running actual Gazebo (Stage 3+) in CI — GitHub-hosted runners have no
+> GPU, and a self-hosted runner is more setup/maintenance than this project needs right now.
+> Worth running that Stage 1–2 workflow on **both x86_64 and arm64 runners** when it exists
+> — Hari's dev VM is arm64, teammates are on x86_64, and cross-arch build differences are
+> already a known risk (see the architecture note above). See `04-roadmap-checklist.md`
+> Stage 0.
+
 ---
 
 # Stage 3 — Gazebo (Linux)
 
 *Detail to be written when Stage 2 passes.* Notes captured now so they aren't lost:
 
-**Stack:** Ubuntu 24.04 (or Linux Mint 22, which is built on it) + **Gazebo Harmonic** +
-**ArduPilot SITL** + the `ardupilot_gazebo` plugin + **ROS 2 Jazzy** (needed only for
-`ros_gz_bridge`, to get camera frames out of Gazebo into OpenCV).
+**Stack:** **Ubuntu (Parallels VM on Hari's M1 Mac) + Gazebo + ArduPilot SITL +
+`ardupilot_gazebo` plugin + QGroundControl.** Gazebo and ROS 2 Humble are already installed
+in that VM; ArduPilot SITL, the `ardupilot_gazebo` plugin, and QGroundControl still need
+adding.
+
+> 🟡 **ROS 2 is an open question, not a settled part of this stage** — see
+> `06-open-questions.md` Q11. The professor asked for ROS 2, but nothing in the pipeline
+> technically needs it: ArduPilot↔Gazebo goes through `ardupilot_gazebo` directly, and our
+> pipeline↔ArduPilot goes through `pymavlink`/MAVLink either way. The one place ROS 2 would
+> normally help is getting camera frames out of Gazebo (`ros_gz_bridge`) — **default plan
+> is to skip that and use Gazebo's own `gz-transport` Python API to read the camera topic
+> directly, no ROS 2 involved.** Confirm the actual scope of the requirement with the guide
+> before starting this stage; if ROS 2 turns out to be mandatory, swap in `ros_gz_bridge`
+> for the camera feed — nothing else changes.
 
 **Two machines, one repo:**
-- **Your Mac:** a UTM VM running Ubuntu 24.04 arm64 — for *writing and checking* code.
-  5–15 fps from software rendering is fine for "does this work?"
-  - UTM is free. Allocate 8 GB RAM, 6 CPUs, 40 GB disk (expect ~30 GB actual —
-    ⚠️ you have ~60 GB free, watch it)
-  - 💡 If Gazebo is unstable under software rendering, force the older renderer:
-    `gz sim --render-engine ogre`
+- **Hari's Parallels Ubuntu VM (22.04 arm64, 6 vCPU / 12 GB RAM):** for *writing and
+  checking* code. **Gazebo Harmonic** (`gz-harmonic`, gz sim 8.15.0) + **ROS 2 Humble
+  Desktop** are already installed — Harmonic specifically because no arm64 build of Gazebo
+  Classic exists, not a free choice. Whatever fps software rendering gives is fine for
+  "does this work?" — check available RAM/CPU/disk allocation before assuming headroom,
+  since it shares the M1's ~60 GB free.
+  - ⚠️ **Verified rendering bug + fix:** Ogre2 + the VM's GPU passthrough (virgl, shows as
+    "Apple M1 (Compat)") crashes the Gazebo GUI during mipmap generation. Fix:
+    `LIBGL_ALWAYS_SOFTWARE=1` (forces CPU/llvmpipe rendering), set permanently in
+    `~/.bashrc`. Staying on Ogre2 (not switching to the older Ogre1) despite the CPU cost —
+    accept ~5–15 fps and no visual polish, priority is functional sim over graphics quality.
+  - ⚠️ **Missing package:** `ros_gz_sim` (the launch wrapper) isn't published for
+    arm64/Humble via apt, even though `ros-humble-ros-gz-bridge`/`-interfaces`/`-image` are.
+    Options when this is actually needed: build `ros_gz_sim` from source
+    (github.com/gazebosim/ros_gz, humble branch), or launch `gz sim` directly and bridge
+    topics manually.
+  - 🟡 **Unmeasured risk, flagged for later:** the software-rendered Gazebo GUI and our
+    vision-model inference will compete for the same CPU cores on a 6-vCPU VM. Benchmark
+    rendering fps vs. inference latency *separately* before assuming the combined pipeline
+    is fast enough — don't discover this contention mid-integration.
 - **Friend's Linux Mint + 40-series GPU:** full frame rate, real experiments, the numbers
   that go in the report. `git pull` and run.
+  - 🟡 **Architecture note:** this VM is arm64; the teammate's Linux Mint/GPU machines are
+    x86_64. Expect native-build differences (compiled dependencies, prebuilt binaries) —
+    don't assume something that works in the VM builds identically there, or vice versa.
 
 **This split is exactly why `frame_source.py` matters** — the same pipeline code runs
-against the synthetic camera on your Mac and the Gazebo camera on the GPU machine, with
-one line changed.
+against the synthetic camera on your Mac and the Gazebo camera on either Linux machine,
+with one line changed.
 
-⚠️ **Linux Mint note:** ROS 2 Jazzy's apt repo keys off the Ubuntu codename. On Mint you
-must set it to `noble` manually rather than letting it auto-detect. Gazebo Harmonic's own
-repo installs normally.
+⚠️ **Linux Mint note:** ROS 2's apt repo keys off the Ubuntu codename. On Mint you may need
+to set it manually rather than letting it auto-detect (confirm against whichever ROS 2
+distro Mint's base Ubuntu version actually supports — don't assume it matches Humble).
+Gazebo's own repo installs normally.
 
 ---
 
@@ -246,8 +287,10 @@ see `04-roadmap-checklist.md`.
 
 ## Common beginner questions
 
-**Do I need ROS?** Not for stages 1–2. In stage 3 it's the pragmatic way to get camera
-images out of Gazebo (`ros_gz_bridge`). Add it then, not before.
+**Do I need ROS?** Not for stages 1–2, and per the current default plan, not for stage 3
+either — `gz-transport` can pull camera images out of Gazebo directly, without ROS 2. ROS 2
+only enters the picture if the guide confirms her requirement means something specific we'd
+otherwise miss (`06-open-questions.md` Q11). Don't add it speculatively either way.
 
 **Is SITL "real"?** The autopilot code is 100% real — same C++ that runs on the flight
 controller. What's simulated is the physics, sensors, and (in stage 3) the camera. This is

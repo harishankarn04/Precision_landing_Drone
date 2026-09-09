@@ -75,13 +75,19 @@ The gap between those two is exactly your project:
 | C7 | Full simulation environment enabling all of the above without crashing hardware | Medium | None | **Infrastructure — do this first.** Everything else is faster afterwards. |
 
 Suggested framing for the report: *"ROLAND validated its approach only in Gazebo
-simulation and used a PX4/VIO stack. We port the architecture to a low-cost ArduPilot
-platform, validate it in both simulation and on real hardware, and add multi-scale
-fiducial fusion (which ROLAND lacks) to its UWB+detection EKF."*
+simulation, on PX4. We take its estimator and mission architecture to real hardware on
+ArduPilot, validating it in both simulation and on a low-cost airframe, and add
+multi-scale fiducial fusion (which ROLAND lacks) to its UWB+detection EKF."*
 
 That is a defensible, honest, and genuinely publishable framing: **ROLAND is sim-only;
 you go to hardware.** (ROLAND's own conclusion says "The real-world experiment is left
 as the future works.")
+
+> Updated 2026-09-09: our autopilot choice changed from ArduPilot to PX4 on 2026-08-26,
+> then reverted back to **ArduPilot** (`CLAUDE.md` §0b). We're porting ROLAND's estimator
+> and controller *ideas* across both a sim-to-hardware gap and an autopilot difference
+> (ROLAND is PX4, we're ArduPilot) — a slightly less direct comparison than the brief PX4
+> window offered, but the same honest framing: ROLAND never flew, we do.
 
 ---
 

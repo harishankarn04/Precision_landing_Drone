@@ -9,6 +9,13 @@ Guide: Dr. Sreeja Kochuvila (**same guide as us**)
 > See `06-open-questions.md` Q2. Everything below is reconstructible from the thesis
 > if the code is lost, but that would cost weeks.
 
+> ⚠️ **Firmware note (2026-09-09):** everything below describes the senior's real,
+> ArduPilot-based system. Our own build briefly targeted PX4 (2026-08-26–2026-09-09) but
+> is **back on ArduPilot** (`CLAUDE.md` §0b) — so the MAVLink/`PLND_*` integration details
+> below (§3's bottom half, §6) are directly applicable again, not just historical prior
+> art. The perception spec (marker layout, PnP solver, fusion math, §2–§3) was always
+> autopilot-agnostic and remains the reference either way.
+
 ---
 
 ## 1. Hardware inventory (thesis Table 3.1)

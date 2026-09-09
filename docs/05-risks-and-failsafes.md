@@ -5,6 +5,11 @@ Three sections:
 **B.** the failure modes and the fallback logic we must design,
 **C.** project-level (non-technical) risks.
 
+> ⚠️ **Firmware note (2026-09-09):** our build is on **ArduPilot** (briefly PX4 from
+> 2026-08-26, reverted — `CLAUDE.md` §0b). Everything below, including the ArduPilot
+> parameter names quoted inline (`PLND_*` etc.), is directly applicable — this file never
+> actually needed rewriting during the PX4 window, only this note did.
+
 ---
 
 # A. Missing or weak elements

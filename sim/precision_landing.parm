@@ -1,0 +1,46 @@
+# Precision-landing params for ArduPilot SITL's built-in simulated target (SIM_PLD_*).
+# Verified working 2026-09-11 after tracing the actual failure through ArduPilot's source
+# (libraries/AC_PrecLand/AC_PrecLand.cpp, AC_PrecLand_SITL.cpp, SIM_Precland.cpp).
+#
+# Load with:
+#   Tools/autotest/sim_vehicle.py -v ArduCopter --no-rebuild --out=udp:127.0.0.1:14550 \
+#       --add-param-file=/Users/harishankar/Documents/gitClone/Precision_landing_Drone/sim/precision_landing.parm
+#
+# Without this file, every one of these has to be typed by hand in the MAVProxy console
+# after every SITL restart, and forgetting even one silently breaks precision landing with
+# no obvious error pointing at which param is missing.
+
+PLND_ENABLED     1     # enable-flag: without this, every other PLND_* param is hidden
+PLND_TYPE        4     # 4 = ArduPilot's own built-in SITL simulated target
+
+SIM_PLD_ENABLE   1     # turn on the simulated target device itself
+
+# The simulated beacon's location. Without these (all default to 0,0,0), ArduPilot
+# correctly treats the target as "undefined" and never sees it, at any altitude --
+# this was the first real bug found. Set to this SITL instance's default home
+# (CMAC): "Home: -35.363262 149.165237 alt=584.000000m" from the boot log.
+SIM_PLD_LAT      -35.363262
+SIM_PLD_LON      149.165237
+SIM_PLD_HEIGHT   0        # metres above the SITL origin -- ground level at home
+
+# Second real bug: AC_PrecLand::construct_pos_meas_using_rangefinder() requires either
+# a real rangefinder (we have none -- RNGFND1_TYPE unset) OR the SITL backend's simulated
+# "distance to target" to be nonzero. That distance is only ever nonzero when this option
+# bit is set. Without it, "PrecLand: Target Found" can never print, regardless of beacon
+# position or flight altitude -- the target's XY position can never be computed at all.
+SIM_PLD_OPTIONS  1        # bit 0 = ENABLE_TARGET_DISTANCE
+
+AUTO_OPTIONS     2     # bit 1 = AllowTakeOffWithoutRaisingThrottle. Without this, AUTO
+                       # mode's mission-takeoff requires the pilot to physically raise the
+                       # throttle stick as a safety confirmation and disarms immediately if
+                       # it doesn't see that raise (ArduCopter/mode_auto.cpp comment: "note
+                       # that this can defeat the disarm check on takeoff" -- exactly our
+                       # SITL case, no real stick, rc 3 pinned low). GUIDED's `takeoff`
+                       # command is unaffected -- this only matters for mission-driven AUTO
+                       # takeoffs, found 2026-09-11 tracing ArduCopter/mode_auto.cpp directly.
+
+# Left at SITL defaults, recorded here for reference (not required to be set explicitly):
+#   SIM_PLD_ALT_LMT  15   -- max altitude (m) the simulated target is "visible" from
+#   SIM_PLD_DIST_LMT 10   -- max lateral distance (m) from beacon it's visible from
+#   PLND_EST_TYPE    1    -- Kalman filter estimator; needs ~2s of continuous good
+#                            detections after "Target Found" before "Init Complete"

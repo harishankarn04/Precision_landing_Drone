@@ -42,6 +42,28 @@ the two diagnostic scripts.
 have a flying drone."* Correct. Beacon work begins at **Stage 4**, once the sim drone
 lands itself.
 
+> ⚠️ **Constraint clarified (Hari, 2026-09-11):** the fallback/recovery design must assume
+> **no GPS at all**, not "GPS available, beacon/vision intermittent." This came from being
+> asked "what if there's no GPS?" (likely evaluator/professor) — even though Akash's own
+> thesis system *does* have GPS. This rules out the simple version of the beacon-loss
+> fallback (a plain GPS waypoint fly-back to the last good fix) and makes **ROLAND's actual
+> approach the relevant template**, not a simplification of it: real relative-position
+> tracking via VIO/odometry + UWB + detection (`02-roland-reference.md` §2), since there's
+> no absolute position source to fall back on at all. **Detailed design deferred** — Hari
+> wants to work this through properly later, not sketch it now. Recorded here so the
+> constraint itself isn't lost before that conversation happens.
+>
+> **Direction proposed (Hari, 2026-09-11): a two-tier beacon, not a single UWB system.**
+> LoRa's long range (km-scale) but coarse ranging (meter-level at best, since ranging
+> accuracy comes from bandwidth and LoRa is narrowband by design — this is why UWB, at
+> 500+ MHz bandwidth, gets cm-level ranging and LoRa fundamentally can't match it) suits a
+> *long-range homing* tier: get the drone back to the pad's general vicinity outdoors with
+> no GPS. Vision (AprilTag, already the plan) handles the final cm-accurate approach once
+> close. UWB becomes optional middle ground rather than mandatory. Note: Pozyx itself is a
+> UWB-specific product/protocol — what's reusable from it is the *architectural pattern*
+> (external anchors feeding a position estimate into ArduPilot's EKF as a GPS substitute),
+> not its hardware. Still not designed in detail — direction only.
+
 **This also de-fangs the question:** because we prototype in simulation, choosing the
 beacon no longer blocks procurement — nothing needs buying to test it. The recommendation
 below stands for when we get there.

@@ -116,9 +116,11 @@ fallback ladder explicitly, implement it, and demonstrate each rung deliberately
 ```
  L0  Precision landing on fused vision (+ beacon)          ← nominal
  L1  Vision degraded → beacon/UWB-only relative guidance   ← if marker lost/occluded
- L2  Beacon lost too  → dead-reckon on last estimate + EKF prediction, for T_hold seconds
- L3  Estimate stale > T_hold → ABORT: climb to reacquire altitude, re-search
- L4  N aborts exceeded → give up precision: plain GPS LAND at the last known pad position
+ L2  Beacon lost too  → navigate back to the last position where the beacon was last
+     confirmed valid, for T_hold seconds
+ L3  Re-acquired at that location? → resume normal approach. Still nothing after
+     T_hold? → ABORT: climb to reacquire altitude, re-search
+ L4  N aborts exceeded → give up precision: LAND in place at the last known pad position
  L5  GPS also unhealthy → LAND in place / RTL, depending on altitude and battery
  L6  Any time → pilot takes manual control on ELRS      ← always available, always primary
 ```

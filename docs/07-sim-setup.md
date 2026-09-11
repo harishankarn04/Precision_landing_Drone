@@ -56,7 +56,7 @@ replaced by a UART cable to the Raspberry Pi. **That is why this transfers.**
 - ✅ Xcode Command Line Tools / clang 16
 - ✅ Python 3.13 + `.venv/` in the project with `pymavlink`, `MAVProxy`, `opencv-contrib-python`
 - ✅ ArduPilot source cloned to `~/Documents/gitClone/ardupilot`
-- ⬜ QGroundControl — download the macOS `.dmg` from qgroundcontrol.com
+- ✅ QGroundControl installed, connects over UDP, joystick calibrated and flying (2026-09-09)
 
 > **Note on Python:** the venv deliberately uses **Python 3.13**, not the system 3.14.
 > MAVProxy/pymavlink wheels lag the newest Python release. Always work inside `.venv`.
@@ -67,6 +67,18 @@ replaced by a UART cable to the Raspberry Pi. **That is why this transfers.**
 cd ~/Documents/gitClone/ardupilot && ./waf configure --board sitl && ./waf copter
 ```
 
+> ⚠️ **Verified gotcha (2026-09-09):** on a fresh Homebrew Python (system `python3`, not
+> the project `.venv`), `./waf copter` fails silently partway through with a one-line
+> message like `you need to install empy with '...'` (then `pexpect`, one at a time) and
+> exits 0 — easy to mistake for success since there's no "BUILD FAILED". Fix once,
+> up front, with ArduPilot's own official list
+> (`Tools/environment_install/install-prereqs-mac.sh`):
+> ```bash
+> python3 -m pip install --break-system-packages setuptools lxml matplotlib pymavlink MAVProxy pexpect geocoder flake8 junitparser empy==3.3.4 dronecan
+> ```
+> `--break-system-packages` is needed because Homebrew's Python is externally-managed
+> (PEP 668). After this, `./waf copter` compiles cleanly.
+
 First build takes 10–20 minutes. Then:
 
 ```bash
@@ -75,18 +87,14 @@ cd ~/Documents/gitClone/ardupilot && Tools/autotest/sim_vehicle.py -v ArduCopter
 
 > ⚠️ **Do not use `--map` or `--console`.** They need wxPython, which is painful to install
 > on Apple Silicon — **confirmed missing on this machine** (`MAVProxy` imports fine, `wx`
-> does not). Use QGroundControl for the map instead — connect it to `UDP 127.0.0.1:14550`
-> and it finds the vehicle automatically.
+> does not). Use QGroundControl for the map instead.
 
-**Alternative if `sim_vehicle.py` misbehaves — run the binary directly (verified working):**
-
-```bash
-cd ~/Documents/gitClone/ardupilot && build/sitl/bin/arducopter --model quad --speedup 5 --defaults Tools/autotest/default_params/copter.parm
-```
-
-It prints `Waiting for connection ....` and listens on **TCP 127.0.0.1:5760**. Point
-QGroundControl or a `pymavlink` script at that. This is the leanest possible setup and is
-what our own scripts will use.
+> ✅ **Verified working end-to-end (2026-09-09):** `sim_vehicle.py` with `--out=udp:...`
+> is the route to use — QGroundControl **autoconnects over UDP** with zero manual link
+> setup, unlike running `build/sitl/bin/arducopter` directly, which only opens a TCP port
+> QGC won't auto-detect (that route was tried and dropped — don't reach for it). A joystick
+> plugged in and calibrated under QGC's **Joysticks** settings tab drives the vehicle
+> directly over MAVLink — also verified working.
 
 You'll land in a `STABILIZE>` prompt. First flight:
 
@@ -98,6 +106,26 @@ takeoff 10
 
 The altitude should climb to 10 m. Then `mode LAND` and watch it come down.
 **When that works, Stage 1 is done.** Nothing was harmed and you now have a flying drone.
+
+> ✅ **Actually verified end-to-end (2026-09-09), by Hari, live:** armed, took off, landed.
+> Two real gotchas hit and fixed along the way — both worth knowing before they cost
+> anyone else the same afternoon:
+>
+> 1. **`AP: Arm: Throttle (RC3) is not neutral`** — arming refused. With no real RC
+>    transmitter or hardware joystick connected, ArduPilot has no confirmed "throttle is
+>    at idle" signal and correctly refuses to arm. Fix: in the MAVProxy console,
+>    `rc 3 1000` before arming (channel 3 = throttle in ArduCopter's RC convention;
+>    forces it to the low/idle value ArduPilot wants to see).
+> 2. **QGC's Virtual Joystick doesn't fix this on its own** — it defaults to throttle
+>    *centered*, not at the bottom, so it reads as "not neutral" too, and it actively
+>    fights typed MAVProxy commands if left on. **Turn it off** (General Settings →
+>    Virtual Joystick) for typed-command flying; revisit it later, on its own, for actual
+>    manual-override testing.
+> 3. **Which terminal window to type in, if `sim_vehicle.py` opened two:** the one
+>    titled/running `sim_vehicle.py` with a live command prompt (`STABILIZE>`, `GUIDED>`,
+>    …) is MAVProxy's console — type there. The other window is just the raw ArduCopter
+>    process's log stream (`Waiting for connection...`, `bind port ...`) — no prompt,
+>    nothing to type there.
 
 ## What to actually learn in Stage 1
 
@@ -127,6 +155,52 @@ Take off, then `mode LAND`, and watch it correct toward the simulated target.
 **If this does not work, stop and fix it before writing a single line of perception code.**
 It proves ArduPilot's side of the chain is configured correctly, so that when our own
 pipeline later fails, you know the fault is in *our* code.
+
+> ✅ **Actually passed (2026-09-11), by Hari, live — after two real bugs traced through
+> ArduPilot's own source** (not guessed — `libraries/AC_PrecLand/AC_PrecLand.cpp`,
+> `AC_PrecLand_SITL.cpp`, `SIM_Precland.cpp`), both baked into
+> `sim/precision_landing.parm` so they can't recur:
+>
+> 1. **`SIM_PLD_LAT`/`LON`/`HEIGHT` default to `(0,0,0)`.** ArduPilot correctly treats
+>    that as "no beacon location defined" and the target can never be found at any
+>    altitude — set them to the SITL home position (`-35.363262, 149.165237`, height 0).
+> 2. **`AC_PrecLand::construct_pos_meas_using_rangefinder()` requires either a real
+>    rangefinder (none configured — `RNGFND1_TYPE` unset) or the SITL backend's simulated
+>    distance-to-target to be nonzero**, which is only true when `SIM_PLD_OPTIONS` bit 0
+>    ("Enable target distance") is set. Without it, `PrecLand: Target Found` can never
+>    print, full stop, regardless of beacon position or flight altitude.
+>
+> Confirmed working via the actual log sequence: `PrecLand: Target Found` →
+> (~2 s EKF settle, `PLND_EST_TYPE`'s Kalman filter needs `EKF_INIT_TIME_MS`=2000 ms of
+> continuous good detections) → `PrecLand: Init Complete` → clean landing with **no**
+> `PrecLand: Failsafe Measures` (which had appeared in every failed attempt before this).
+>
+> **Load `sim/precision_landing.parm` automatically** so this never has to be retyped by
+> hand again (retyping it was exactly how the first few attempts silently failed —
+> forgetting one param with no obvious error pointing at which one):
+> ```bash
+> Tools/autotest/sim_vehicle.py -v ArduCopter --no-rebuild --out=udp:127.0.0.1:14550 \
+>     --add-param-file=/Users/harishankar/Documents/gitClone/Precision_landing_Drone/sim/precision_landing.parm
+> ```
+>
+> ✅ **Full AUTO-mode mission validated (2026-09-11)** — not just LAND from GUIDED, a
+> complete `sim/test_mission.waypoints` run (takeoff → 3-waypoint square, ~30 m out →
+> land), exercising synopsis sub-objective 7 ("autonomous waypoint navigation") together
+> with precision landing in one flight: `Target Found`/`Init Complete` near home on
+> climb-out → **`Target Lost`** correctly once out of the beacon's range mid-mission →
+> **`Target Found`**/`Init Complete` again on the return leg → clean touchdown, auto-disarm.
+> That lost→reacquired cycle is real evidence the state machine degrades and recovers
+> correctly, not just a single lucky lock. One more fix was needed to get here:
+> `AUTO_OPTIONS = 2` (`AllowTakeOffWithoutRaisingThrottle`) — AUTO mode's mission-takeoff
+> (unlike GUIDED's direct `takeoff` command) requires a physical throttle raise as a
+> safety confirmation and disarms a few seconds in if it never sees one; with no real
+> stick in SITL, this bit has to be set explicitly. Now baked into
+> `sim/precision_landing.parm` alongside the rest.
+>
+> **Stage 1 is genuinely complete.** Both gates pass: basic flight, and ArduPilot's own
+> precision-landing simulator, now also proven across a real waypoint mission rather than
+> just a straight-up takeoff/land. Stage 2 — our own AprilTag perception replacing
+> `SIM_PLD` — is next.
 
 ### ⚠️ Gotcha found on this machine (2026-08-14)
 

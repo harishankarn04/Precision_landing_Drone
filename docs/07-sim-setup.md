@@ -177,11 +177,10 @@ pipeline later fails, you know the fault is in *our* code.
 >
 > **Load `sim/precision_landing.parm` automatically** so this never has to be retyped by
 > hand again (retyping it was exactly how the first few attempts silently failed —
-> forgetting one param with no obvious error pointing at which one):
-> ```bash
-> Tools/autotest/sim_vehicle.py -v ArduCopter --no-rebuild --out=udp:127.0.0.1:14550 \
->     --add-param-file=/Users/harishankar/Documents/gitClone/Precision_landing_Drone/sim/precision_landing.parm
-> ```
+> forgetting one param with no obvious error pointing at which one). Use
+> `./sim/run_sitl.sh` (see `sim/README.md`) — it resolves this file's path and ArduPilot's
+> clone location automatically, no per-machine path editing, confirmed working across
+> different usernames/OSes on the team already.
 >
 > ✅ **Full AUTO-mode mission validated (2026-09-11)** — not just LAND from GUIDED, a
 > complete `sim/test_mission.waypoints` run (takeoff → 3-waypoint square, ~30 m out →

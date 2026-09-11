@@ -57,6 +57,16 @@ ahead of time. The shape of it, matching what worked before conceptually:
 > arm64 runners** when it exists — Hari's dev VM is arm64, teammates are on x86_64, and
 > that split is a real cross-arch build risk (`07-sim-setup.md` Stage 3). Not built yet;
 > recorded here so the idea isn't lost.
+>
+> **2026-09-11 update:** the portability groundwork for this is now actually done.
+> `sim/run_sitl.sh` resolves its own repo location and ArduPilot's clone path
+> automatically (checked `ARDUPILOT_DIR`, then `~/ardupilot`, then
+> `~/Documents/gitClone/ardupilot`) — no hardcoded per-machine paths anywhere in `sim/`.
+> Confirmed this actually matters: the team's two machines already differ in username, OS,
+> and clone location (Mac vs. Nanda's Linux Mint box). When Stage 1's headless
+> campaign script exists, wiring it into a workflow is now genuinely just "install deps,
+> `./sim/run_sitl.sh`, run the campaign, check its exit code" — the same script a human
+> runs locally is the same one CI would run, nothing CI-specific to write around paths.
 
 ## Stage 1 — Precision landing with our own perception ⭐ *the main event*
 

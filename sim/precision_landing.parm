@@ -2,9 +2,12 @@
 # Verified working 2026-09-11 after tracing the actual failure through ArduPilot's source
 # (libraries/AC_PrecLand/AC_PrecLand.cpp, AC_PrecLand_SITL.cpp, SIM_Precland.cpp).
 #
-# Load with:
-#   Tools/autotest/sim_vehicle.py -v ArduCopter --no-rebuild --out=udp:127.0.0.1:14550 \
-#       --add-param-file=/Users/harishankar/Documents/gitClone/Precision_landing_Drone/sim/precision_landing.parm
+# Load with (from anywhere, on any machine -- no path to edit):
+#   ./sim/run_sitl.sh
+#
+# That wrapper script resolves this file's path and ArduPilot's clone location
+# automatically; see sim/README.md. If calling sim_vehicle.py directly instead, pass
+# --add-param-file=<absolute path to this file> explicitly.
 #
 # Without this file, every one of these has to be typed by hand in the MAVProxy console
 # after every SITL restart, and forgetting even one silently breaks precision landing with

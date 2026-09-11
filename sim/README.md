@@ -30,14 +30,24 @@ whatever Python runs `sim_vehicle.py` — a project `.venv` (as used on the Mac)
 ## 2. Start SITL, every time
 
 ```bash
-cd ardupilot
-Tools/autotest/sim_vehicle.py -v ArduCopter --no-rebuild --out=udp:127.0.0.1:14550 \
-    --add-param-file=/path/to/Precision_landing_Drone/sim/precision_landing.parm
+./sim/run_sitl.sh
 ```
 
-Adjust the `--add-param-file` path to wherever you cloned this repo. That file carries
-every precision-landing and AUTO-mode fix already found — without it you'll hit the same
-bugs (target never found, AUTO takeoff disarms itself) from scratch.
+Run from anywhere inside this repo (or `cd` into it first). **No paths to edit** — the
+script finds its own location and ArduPilot's automatically, checking (in order) an
+`ARDUPILOT_DIR` you set, then `~/ardupilot`, then `~/Documents/gitClone/ardupilot`. If your
+ArduPilot clone lives somewhere else, just export the variable once:
+
+```bash
+export ARDUPILOT_DIR=/wherever/you/put/ardupilot
+```
+
+This wraps the same `sim_vehicle.py` command as before, with `precision_landing.parm`
+always loaded — that file carries every precision-landing and AUTO-mode fix already found;
+without it you'll hit the same bugs (target never found, AUTO takeoff disarms itself) from
+scratch. Change the ground-station port with `OUT_PORT=14551 ./sim/run_sitl.sh` if you ever
+need to; anything else you pass through goes straight to `sim_vehicle.py`
+(`./sim/run_sitl.sh --speedup 2`).
 
 Wait a few seconds after boot before arming — GPS/EKF needs to settle. Arming too early
 gives a harmless `PreArm: Need Position Estimate` that goes away on its own.
@@ -85,7 +95,7 @@ In the MAVProxy console (the terminal `sim_vehicle.py` is running in — the one
 `STABILIZE>`/`GUIDED>` prompt, not the other SITL log window):
 
 ```
-wp load /path/to/Precision_landing_Drone/sim/test_mission.waypoints
+wp load <path to your clone of this repo>/sim/test_mission.waypoints
 mode GUIDED
 rc 3 1000
 arm throttle

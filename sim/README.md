@@ -58,9 +58,10 @@ Just open QGC — it autoconnects to `UDP 14550` with nothing to configure.
 
 ## 3b. Connect with Mission Planner (via Mono, on Linux)
 
-Confirmed from ArduPilot's own `MissionPlanner` repo — real caveat, not hidden: **"not all
-functions are available on Linux."** Good enough for flying and watching telemetry; don't
-expect full Windows parity.
+**Confirmed working end-to-end on Linux Mint, 2026-09-11** (Mono 6.8.0.105) — connects,
+flies, precision-lands. ArduPilot's own `MissionPlanner` repo still notes "not all
+functions are available on Linux," so don't expect full Windows parity, but core
+flying/telemetry works fine.
 
 ```bash
 sudo apt install mono-complete mono-runtime libmono-system-windows-forms4.0-cil \
@@ -74,14 +75,20 @@ Download the latest Mission Planner zip from ArduPilot's firmware site, extract 
 mono MissionPlanner.exe
 ```
 
-If it misbehaves, get more detail with:
-
-```bash
-MONO_LOG_LEVEL=debug mono MissionPlanner.exe
-```
-
 Then connect it the same way as QGC: UDP, port **14550**, on `127.0.0.1` (since SITL is
 running on the same machine as Mission Planner in this setup).
+
+> **If it hangs at "Connecting..." or times out:** before suspecting Mission Planner or
+> Mono, check that SITL is actually still running — `ps aux | grep -i -E
+> "sim_vehicle|arducopter|mavproxy"`. This was the actual cause the one time this looked
+> broken (2026-09-11): SITL had exited and nothing was sending MAVLink at all, so *any* GCS
+> would have timed out identically. Confirm SITL is up first — it's a much more common
+> cause than a genuine Mission Planner/Mono bug.
+>
+> If SITL is confirmed running and it's still not connecting, get more detail with:
+> ```bash
+> MONO_LOG_LEVEL=debug mono MissionPlanner.exe
+> ```
 
 > **Connecting across two different machines instead** (e.g. Mission Planner on a laptop,
 > SITL running elsewhere on the network) is possible but not what we've tested — you'd

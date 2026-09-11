@@ -70,6 +70,7 @@ The senior's thesis never got there, and ROLAND was never flown at all.
 | [`docs/05-risks-and-failsafes.md`](docs/05-risks-and-failsafes.md) | Missing pieces, failure modes, the fallback ladder, safety gates |
 | [`docs/06-open-questions.md`](docs/06-open-questions.md) | Open decisions — deferred to the stage where they matter |
 | [`docs/07-sim-setup.md`](docs/07-sim-setup.md) | Hands-on setup guide, stage by stage — start at Stage 1 |
+| **[`sim/README.md`](sim/README.md)** | **How to actually run the sim on your own machine** — one-time setup, starting SITL, connecting your GCS, flying the test mission |
 
 Source material lives in `Documentation/` (three PDFs, read-only).
 
@@ -100,7 +101,10 @@ autopilot as the senior's system this time.
 - **Bench → hover-observe → land.** Never skip a validation rung.
 - **ArduPilot, not PX4** (reverted 2026-09-09). No longer matches ROLAND's stack (PX4) —
   port ROLAND's ideas, don't expect direct config compatibility.
-- **QGroundControl** is the GCS of record (cross-platform; Mission Planner is Windows-only).
+- **GCS is your choice.** QGroundControl (cross-platform) is the default recommendation, but
+  Mission Planner via Mono works fine on Linux too — confirmed end-to-end 2026-09-11 on
+  Nanda's machine. Either connects to the same SITL over `udp:127.0.0.1:14550`; pick
+  whichever you're comfortable with.
 - **Manual override always live**, every autonomous flight — ELRS + a mode switch, same
   mechanism the senior used.
 - Full arming checks stay **enabled** for any unsupervised outdoor flight.
@@ -113,8 +117,28 @@ autopilot as the senior's system this time.
 ```
 Documentation/   source PDFs (read-only)
 docs/            working documents — start here
-sim/             empty — previous ArduPilot/Webots scripts removed; ready for Gazebo work
+sim/             ArduPilot SITL launcher (run_sitl.sh), precision-landing params,
+                 test mission, README — see sim/README.md to actually run it
 src/             (future) perception + control code
 hardware/        (future) BOM, wiring, 3D prints, calibration data
 logs/            (future) flight logs, video, analysis
 ```
+
+## Working together on this repo
+
+Three people, one repo, everyone flying their **own independent local SITL** (see
+`sim/README.md` — this isn't a shared simulation, each person's stack is self-contained on
+`127.0.0.1`). To avoid stepping on each other:
+
+- **`git pull` before you start a session**, especially before touching anything in `sim/`
+  or `docs/` — those are the files most likely to change under you.
+- **Branch for anything more than a one-line doc fix.** `git checkout -b <name>/<what>`,
+  push it, open a PR (or just say so in the group chat before merging to `main` directly —
+  team's small enough that heavyweight PR review isn't necessary, but a heads-up is).
+- **`sim/precision_landing.parm` and `sim/run_sitl.sh` are shared infrastructure** — if you
+  find a new required param or a bug in the script, fix it there and commit it (with an
+  explanation, per `sim/README.md`'s existing style) so everyone benefits, rather than
+  patching it locally and keeping the fix to yourself.
+- **If your SITL/GCS session won't connect**, the single most common cause is SITL not
+  actually running — check with `ps aux | grep sim_vehicle` before assuming your GCS config
+  is wrong. `sim/README.md` has the full troubleshooting flow.

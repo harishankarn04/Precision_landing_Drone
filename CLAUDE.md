@@ -111,6 +111,7 @@ sensor-fusion architecture from the ROLAND paper.
 | `Documentation/Report_Full_v2_No_First_Page.pdf` (61 pp) | **Senior's completed M.Tech thesis** — Akash Dinesh (BL.EN.P2RAU24001), May 2026, same guide | The perception-pipeline specification we rebuild from. See `docs/01-inherited-system.md` |
 | `Documentation/ROLAND_....pdf` (6 pp) | ICCAS 2021 paper, KAIST (Kim, Lee, Choi, Jeon, Kim, Myung) | **Target architecture** for the moving-platform half — ROLAND is PX4-based, we're ArduPilot again (§0b), so port its ideas, not its autopilot integration. Code: https://github.com/engcang/ROLAND. See `docs/02-roland-reference.md` |
 | `Documentation/Synopsis Details_Format_Project_Phase_1.pdf` (3 pp) | **Our own Phase-1 synopsis**, as submitted | Defines the officially-approved objectives and the Jul–Nov 2026 timeline. See `docs/00-project-brief.md` |
+| `Documentation/dinesh_reference_code/` (received 2026-09-15) | Dinesh's actual production Python — not just the thesis PDF | Reference for Stage 1's fusion/velocity/jump-filter logic once that's being built. **Not run yet** (sim-first) — has a known frame-bug discrepancy vs `CLAUDE.md` §7 item 0, see its own README before trusting either version |
 
 ---
 

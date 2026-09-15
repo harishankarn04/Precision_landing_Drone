@@ -214,6 +214,31 @@ matter either way. If she confirms it's mandatory, swapping `gz-transport` for
 
 **Answer:** _____
 
+**2026-09-15 update — a real hardware constraint now backs this up, separate from the
+ROS 2 question itself.** Nanda has been independently building a PX4 + ROS 2 stack
+(landing-speed profile, a QoS-fixed telemetry pipeline, a live Python dashboard) — real
+progress, but on a stack this project moved off twice already (`CLAUDE.md` §0b). Worth
+being precise about *why* PX4 is off the table, since two different things are true at
+once and shouldn't be conflated:
+
+- **PX4 can talk MAVLink directly, same as ArduPilot** — QGroundControl and raw
+  `pymavlink` both connect to PX4 the same way they connect to ArduPilot. ROS 2 +
+  Micro XRCE-DDS is PX4's actively-recommended companion-computer pattern since ~v1.14,
+  not the only way to talk to it. Nanda's ROS 2 dependency comes from building against
+  that recommended pattern, not from MAVLink being unavailable.
+- **The actual hard blocker is the flight controller we own.** Our Pixhawk 2.4.8 is the
+  `px4fmu-v2` target — PX4 dropped official firmware support for that target (flash-size
+  limit) well before v1.14. Confirmed: current PX4 firmware errors out on it. That's true
+  with or without ROS 2 in the picture; buying a Holybro Pixhawk 6C would be required for
+  *any* current PX4 firmware on this project, independent of the ROS 2 question above.
+
+**Decided 2026-09-15 (Hari): continue ArduPilot only.** Matches the Pixhawk 2.4.8 already
+owned, talks MAVLink directly via `pymavlink` (no bridge needed), and sidesteps this
+hardware purchase entirely. Nanda's PX4/ROS 2 work doesn't port directly — the concepts
+(a live telemetry view, a landing-descent-speed profile) are reusable, the code mostly
+isn't. He should be told directly this isn't the path forward so effort isn't sunk further
+into it.
+
 ---
 
 ## Currently blocking: **nothing.** ✅

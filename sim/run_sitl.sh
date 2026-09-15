@@ -11,7 +11,26 @@
 #
 # Any extra arguments are passed straight through to sim_vehicle.py, e.g.:
 #   ./sim/run_sitl.sh --speedup 2
+#
+# Defaults SITL's start location to Amrita Vishwa Vidyapeetham, Bengaluru
+# (12.895444637941674, 77.67580386901876) -- matches sim/precision_landing.parm's
+# SIM_PLD_LAT/LON, decided 2026-09-15. Pass your own -L/-l/--location/--custom-location
+# to override (e.g. to go back to ArduPilot's CMAC default for an unrelated test).
 set -euo pipefail
+
+DEFAULT_LOCATION="12.895444637941674,77.67580386901876,0,0"
+location_arg=()
+has_location_flag=false
+for arg in "$@"; do
+    case "$arg" in
+        -L|--location|-L=*|--location=*|-l|--custom-location|-l=*|--custom-location=*)
+            has_location_flag=true
+            ;;
+    esac
+done
+if [ "$has_location_flag" = false ]; then
+    location_arg=(--custom-location="$DEFAULT_LOCATION")
+fi
 
 # This script's own directory -- makes --add-param-file correct regardless of
 # where this repo was cloned or who's running it. This is the actual fix for
@@ -57,4 +76,5 @@ cd "$AP"
 exec Tools/autotest/sim_vehicle.py -v ArduCopter --no-rebuild \
     --out="udp:127.0.0.1:${OUT_PORT}" \
     --add-param-file="$PARM_FILE" \
+    "${location_arg[@]}" \
     "$@"

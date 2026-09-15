@@ -163,7 +163,10 @@ pipeline later fails, you know the fault is in *our* code.
 >
 > 1. **`SIM_PLD_LAT`/`LON`/`HEIGHT` default to `(0,0,0)`.** ArduPilot correctly treats
 >    that as "no beacon location defined" and the target can never be found at any
->    altitude — set them to the SITL home position (`-35.363262, 149.165237`, height 0).
+>    altitude — set them to the SITL home position (at the time this was diagnosed,
+>    ArduPilot's default `-35.363262, 149.165237`, height 0; changed 2026-09-15 to
+>    Amrita Vishwa Vidyapeetham, Bengaluru — see `sim/run_sitl.sh` and
+>    `sim/precision_landing.parm` for the current values, always keep them matched).
 > 2. **`AC_PrecLand::construct_pos_meas_using_rangefinder()` requires either a real
 >    rangefinder (none configured — `RNGFND1_TYPE` unset) or the SITL backend's simulated
 >    distance-to-target to be nonzero**, which is only true when `SIM_PLD_OPTIONS` bit 0

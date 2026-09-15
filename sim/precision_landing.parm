@@ -20,10 +20,12 @@ SIM_PLD_ENABLE   1     # turn on the simulated target device itself
 
 # The simulated beacon's location. Without these (all default to 0,0,0), ArduPilot
 # correctly treats the target as "undefined" and never sees it, at any altitude --
-# this was the first real bug found. Set to this SITL instance's default home
-# (CMAC): "Home: -35.363262 149.165237 alt=584.000000m" from the boot log.
-SIM_PLD_LAT      -35.363262
-SIM_PLD_LON      149.165237
+# this was the first real bug found. Set to match sim/run_sitl.sh's default SITL
+# start location (Amrita Vishwa Vidyapeetham, Bengaluru -- decided 2026-09-15,
+# was CMAC before). If you override run_sitl.sh's --custom-location, update this
+# to match, or the beacon and home will disagree and PrecLand will never engage.
+SIM_PLD_LAT      12.895444637941674
+SIM_PLD_LON      77.67580386901876
 SIM_PLD_HEIGHT   0        # metres above the SITL origin -- ground level at home
 
 # Second real bug: AC_PrecLand::construct_pos_meas_using_rangefinder() requires either

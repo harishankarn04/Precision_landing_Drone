@@ -109,6 +109,11 @@ arm throttle
 mode AUTO
 ```
 
+> **Must be the full path — a relative one silently fails to resolve.** MAVProxy's working
+> directory is wherever `run_sitl.sh` `cd`s into (your ArduPilot clone, so `--add-param-file`
+> resolves correctly), not this repo — so `wp load sim/test_mission.waypoints` looks for a
+> `sim/` folder inside your ArduPilot clone and doesn't find one. Confirmed 2026-09-15.
+
 Expected: takeoff → a ~30 m square loop → precision-landing engages and locks
 (`PrecLand: Target Found` → `Init Complete`) near home, correctly reports
 `PrecLand: Target Lost` once out of the beacon's simulated range mid-mission, re-locks on

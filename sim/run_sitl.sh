@@ -14,11 +14,15 @@
 #
 # Defaults SITL's start location to Amrita Vishwa Vidyapeetham, Bengaluru
 # (12.895444637941674, 77.67580386901876) -- matches sim/precision_landing.parm's
-# SIM_PLD_LAT/LON, decided 2026-09-15. Pass your own -L/-l/--location/--custom-location
-# to override (e.g. to go back to ArduPilot's CMAC default for an unrelated test).
+# SIM_PLD_LAT/LON, decided 2026-09-15. Altitude 909m: found by first trying 0 and
+# reading ArduPilot's own "Terrain: clamping offset -909 to -30" warning at boot,
+# which is SITL's terrain database reporting the real elevation for this exact
+# lat/lon -- more reliable than any public source for Kasavanahalli specifically.
+# Pass your own -L/-l/--location/--custom-location to override (e.g. back to
+# ArduPilot's CMAC default for an unrelated test).
 set -euo pipefail
 
-DEFAULT_LOCATION="12.895444637941674,77.67580386901876,0,0"
+DEFAULT_LOCATION="12.895444637941674,77.67580386901876,909,0"
 location_arg=()
 has_location_flag=false
 for arg in "$@"; do

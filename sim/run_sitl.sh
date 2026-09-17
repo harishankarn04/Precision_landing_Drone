@@ -5,9 +5,18 @@
 #   ./sim/run_sitl.sh
 #
 # Optional overrides (env vars):
-#   ARDUPILOT_DIR   where ArduPilot is cloned+built (default: ~/ardupilot, then
-#                   ~/Documents/gitClone/ardupilot, whichever exists first)
-#   OUT_PORT        UDP port your ground station listens on (default: 14550)
+#   ARDUPILOT_DIR    where ArduPilot is cloned+built (default: ~/ardupilot, then
+#                    ~/Documents/gitClone/ardupilot, whichever exists first)
+#   OUT_PORT         UDP port your ground station listens on (default: 14550)
+#   COMPANION_PORT   UDP port src/mavlink_out.py (and anything else acting as a
+#                    companion computer) connects to (default: 14540). Separate from
+#                    OUT_PORT because ArduPilot's SITL TCP serial driver only tracks
+#                    ONE client per port (AP_HAL_SITL/UARTDriver.cpp accept() into a
+#                    single _fd) -- confirmed 2026-09-15 when a second client on
+#                    tcp:5760 connected but silently never received a heartbeat while
+#                    MAVProxy already held that port. This port is a second MAVProxy
+#                    --out link instead, same pattern already proven with QGC/Mission
+#                    Planner on OUT_PORT, just not sharing their port.
 #
 # Any extra arguments are passed straight through to sim_vehicle.py, e.g.:
 #   ./sim/run_sitl.sh --speedup 2
@@ -70,15 +79,18 @@ if [ ! -x "$BIN" ]; then
 fi
 
 OUT_PORT="${OUT_PORT:-14550}"
+COMPANION_PORT="${COMPANION_PORT:-14540}"
 
-echo "ArduPilot: $AP"
-echo "Params:    $PARM_FILE"
-echo "GCS port:  UDP $OUT_PORT (point QGroundControl or Mission Planner here)"
+echo "ArduPilot:      $AP"
+echo "Params:         $PARM_FILE"
+echo "GCS port:       UDP $OUT_PORT (point QGroundControl or Mission Planner here)"
+echo "Companion port: UDP $COMPANION_PORT (src/mavlink_out.py connects here)"
 echo ""
 
 cd "$AP"
 exec Tools/autotest/sim_vehicle.py -v ArduCopter --no-rebuild \
     --out="udp:127.0.0.1:${OUT_PORT}" \
+    --out="udp:127.0.0.1:${COMPANION_PORT}" \
     --add-param-file="$PARM_FILE" \
     "${location_arg[@]}" \
     "$@"

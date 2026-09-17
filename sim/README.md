@@ -49,6 +49,22 @@ scratch. Change the ground-station port with `OUT_PORT=14551 ./sim/run_sitl.sh` 
 need to; anything else you pass through goes straight to `sim_vehicle.py`
 (`./sim/run_sitl.sh --speedup 2`).
 
+It also opens a second link on `COMPANION_PORT` (default **14540**) for
+`src/mavlink_out.py` (Stage 2's `LANDING_TARGET` sender) — deliberately separate from
+`OUT_PORT`/14550, since ArduPilot's SITL TCP serial driver only tracks one client per port
+and silently drops a second connection with no heartbeat. Nothing to configure for this
+unless you're running two companion scripts at once.
+
+> **If you edit `precision_landing.parm` and the change doesn't seem to take effect,
+> wipe SITL's persisted EEPROM.** Confirmed 2026-09-15: `--add-param-file` only sets
+> DEFAULTS — it does NOT override a param ArduPilot has already saved to
+> `<ardupilot clone>/eeprom.bin` from any earlier run. `PLND_TYPE`/`SIM_PLD_LAT`/`LON`
+> silently kept loading Sep-11-era values for hours despite the file on disk being
+> correctly edited, with no error anywhere pointing at the mismatch. Fix:
+> `./sim/run_sitl.sh -w` (ArduPilot's own `--wipe-eeprom` flag) forces a genuinely clean
+> load from the param file. Do this any time `.parm` changes matter and the observed
+> behavior doesn't match what's in the file.
+
 Wait a few seconds after boot before arming — GPS/EKF needs to settle. Arming too early
 gives a harmless `PreArm: Need Position Estimate` that goes away on its own.
 

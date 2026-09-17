@@ -1,6 +1,9 @@
-# Precision-landing params for ArduPilot SITL's built-in simulated target (SIM_PLD_*).
-# Verified working 2026-09-11 after tracing the actual failure through ArduPilot's source
-# (libraries/AC_PrecLand/AC_PrecLand.cpp, AC_PrecLand_SITL.cpp, SIM_Precland.cpp).
+# Precision-landing params for ArduPilot. PLND_TYPE=1 (MAVLink companion) as of
+# 2026-09-15, Stage 2: our own src/mavlink_out.py now sends LANDING_TARGET instead of
+# ArduPilot's built-in SIM_PLD simulator. Stage 1's SIM_PLD_* setup (verified working
+# 2026-09-11, target acquisition/lateral correction/RTL all confirmed live) is kept
+# commented below -- switch PLND_TYPE back to 4 and uncomment that block to fall back
+# to it for a quick flight-control-only sanity check with no companion script running.
 #
 # Load with (from anywhere, on any machine -- no path to edit):
 #   ./sim/run_sitl.sh
@@ -14,26 +17,30 @@
 # no obvious error pointing at which param is missing.
 
 PLND_ENABLED     1     # enable-flag: without this, every other PLND_* param is hidden
-PLND_TYPE        4     # 4 = ArduPilot's own built-in SITL simulated target
+PLND_TYPE        1     # 1 = MAVLink companion computer (src/mavlink_out.py). Was 4
+                       # (ArduPilot's own SITL simulated target) through Stage 1.
 
-SIM_PLD_ENABLE   1     # turn on the simulated target device itself
-
+# --- Stage 1 fallback: ArduPilot's own SIM_PLD simulator, no companion script needed ---
+# Uncomment this block and set PLND_TYPE back to 4 above to use it again.
+# SIM_PLD_ENABLE   1     # turn on the simulated target device itself
+#
 # The simulated beacon's location. Without these (all default to 0,0,0), ArduPilot
 # correctly treats the target as "undefined" and never sees it, at any altitude --
 # this was the first real bug found. Set to match sim/run_sitl.sh's default SITL
 # start location (Amrita Vishwa Vidyapeetham, Bengaluru -- decided 2026-09-15,
 # was CMAC before). If you override run_sitl.sh's --custom-location, update this
 # to match, or the beacon and home will disagree and PrecLand will never engage.
-SIM_PLD_LAT      12.895444637941674
-SIM_PLD_LON      77.67580386901876
-SIM_PLD_HEIGHT   0        # metres above the SITL origin -- ground level at home
-
+# SIM_PLD_LAT      12.895444637941674
+# SIM_PLD_LON      77.67580386901876
+# SIM_PLD_HEIGHT   0        # metres above the SITL origin -- ground level at home
+#
 # Second real bug: AC_PrecLand::construct_pos_meas_using_rangefinder() requires either
 # a real rangefinder (we have none -- RNGFND1_TYPE unset) OR the SITL backend's simulated
 # "distance to target" to be nonzero. That distance is only ever nonzero when this option
 # bit is set. Without it, "PrecLand: Target Found" can never print, regardless of beacon
 # position or flight altitude -- the target's XY position can never be computed at all.
-SIM_PLD_OPTIONS  1        # bit 0 = ENABLE_TARGET_DISTANCE
+# SIM_PLD_OPTIONS  1        # bit 0 = ENABLE_TARGET_DISTANCE
+# --- end Stage 1 fallback block ---
 
 AUTO_OPTIONS     2     # bit 1 = AllowTakeOffWithoutRaisingThrottle. Without this, AUTO
                        # mode's mission-takeoff requires the pilot to physically raise the

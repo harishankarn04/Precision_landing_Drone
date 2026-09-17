@@ -20,6 +20,30 @@ PLND_ENABLED     1     # enable-flag: without this, every other PLND_* param is 
 PLND_TYPE        1     # 1 = MAVLink companion computer (src/mavlink_out.py). Was 4
                        # (ArduPilot's own SITL simulated target) through Stage 1.
 
+# Descent-response tuning, 2026-09-18. A live run landed 0.70m off centre with the
+# fused position drifting during descent. Root-caused via an offline replay of the
+# actual flight's true (perfectly synchronised) attitude+position through our own
+# detection/fusion code: the raw body-frame values we send ARE correct given vehicle
+# tilt (e.g. 18 degrees roll at ~4.8m altitude legitimately produces ~1.5m of body-frame
+# lateral offset even directly above the target -- MAV_FRAME_BODY_FRD is supposed to
+# carry exactly this, with ArduPilot's own EKF rotating it into earth-frame using its
+# more accurate internal attitude estimate). Not a bug in the camera/fusion geometry.
+# The likelier cause: PLND_ACC_P_NSE was still at ArduPilot's aggressive default (2.5),
+# despite the thesis's own #1 tuning recommendation (CLAUDE.md section 8) to reduce it --
+# an underdamped estimator overshoots/overcorrects during exactly the high-attitude
+# excursions measured above. Halved as a first trial, not yet re-validated with a live
+# flight -- revisit this value based on the next test's actual touchdown offset.
+PLND_ACC_P_NSE   1.25
+
+# Camera-to-CG mounting offset. Left at zero because the synthetic camera has no
+# physical offset to model (unlike CLAUDE.md section 8's PLND_CAM_POS_Z=-0.05 for the
+# senior's real hardware) -- set explicitly here so it's a deliberate zero, not an
+# unexamined default, and so it's obvious where to put a real value once real/Gazebo
+# hardware geometry exists.
+PLND_CAM_POS_X   0
+PLND_CAM_POS_Y   0
+PLND_CAM_POS_Z   0
+
 # --- Stage 1 fallback: ArduPilot's own SIM_PLD simulator, no companion script needed ---
 # Uncomment this block and set PLND_TYPE back to 4 above to use it again.
 # SIM_PLD_ENABLE   1     # turn on the simulated target device itself

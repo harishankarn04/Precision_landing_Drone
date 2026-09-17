@@ -108,16 +108,26 @@ underneath.
       recommendation: reduce it, `CLAUDE.md` §8)
 - [ ] **Gate ⭐⭐⭐ — 20+ runs with reported mean / σ / max touchdown offset.**
       *This already exceeds the senior's thesis, which never closed the loop.*
-      ⚠️ **Blocked on an accuracy bug found 2026-09-18**: single-run touchdown was 0.70m
-      off centre, and the fused position visibly drifts progressively during descent
-      (near-zero at 5m altitude, `pX=+0.16 pY=-0.25` by 1.9m) — not just the near-touchdown
-      FOV loss noted above. Leading suspect: `sim/synthetic_camera.py` reads `ATTITUDE` and
-      `LOCAL_POSITION_NED` as independent MAVLink messages and uses whichever arrived most
-      recently for each, uncorrelated by timestamp — untested territory, since every prior
-      validation (the 4-pose corner-order check) used static poses, not a live closed loop
-      with continuously changing attitude. Also unset: `PLND_CAM_POS_X/Y/Z` (`CLAUDE.md`
-      §8 lists `Z=-0.05`, currently defaulted to zero). Don't run the 20-run campaign until
-      this is root-caused — it would just measure the bug, not real system accuracy.
+      ⚠️ **Accuracy issue found 2026-09-18, root-caused, fix not yet re-validated live.**
+      Single-run touchdown was 0.70m off centre, fused position drifting progressively
+      during descent. Root cause, confirmed by replaying the actual flight's true
+      (perfectly synchronised) attitude+position offline through our own code: **not a
+      geometry/camera bug** — the raw body-frame values we send are physically correct
+      given vehicle tilt (18° roll at ~4.8m altitude legitimately produces ~1.5m of
+      body-frame lateral offset even directly above the target; that's what
+      `MAV_FRAME_BODY_FRD` is supposed to carry, with ArduPilot's own EKF rotating it
+      into earth-frame). The real cause: `PLND_ACC_P_NSE` was still at ArduPilot's
+      aggressive default (`2.5`) — the thesis's own #1 tuning recommendation
+      (`CLAUDE.md` §8) to reduce it was never actually done. An underdamped estimator
+      overshoots/overcorrects, causing exactly the high-attitude excursions measured —
+      which *also* explains why multi-tag fusion never engaged live (confirmed offline:
+      all 5 tags detect fine between 0.7–2m at zero tilt, matching the board's intended
+      multi-scale range, but tilt pushes off-center corner tags out of frame well before
+      the center tag) — one root cause behind both the drift and the premature target
+      loss, not two separate bugs. Halved to `1.25` in `sim/precision_landing.parm`
+      (also set `PLND_CAM_POS_X/Y/Z=0` explicitly — deliberate zero, not an unexamined
+      default). **Not yet re-tested live** — re-verify touchdown offset before running
+      the 20-run campaign, and retune further if `1.25` isn't the right value.
 - [ ] Fallback ladder L1–L5 implemented and each rung deliberately demonstrated
       (`05-risks-and-failsafes.md` §B1) — `PLND_STRICT`, `PLND_RET_BEHAVE`,
       `PLND_RET_MAX`, `PLND_ALT_MIN/MAX`, `PLND_TIMEOUT`, `PLND_OPTIONS`

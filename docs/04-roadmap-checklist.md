@@ -74,20 +74,34 @@ Same goal as before, same perception spec (`docs/01-inherited-system.md` §3), n
 underneath.
 
 - [ ] Represent the multi-scale AprilTag board (24 cm tag36h11 ID 0 centre + four 8 cm
-      IDs 1–4 at ±0.22 m on a 60 cm board) in the Gazebo world
-- [ ] A downward camera in Gazebo, read via `gz-transport` directly (default — no ROS 2,
-      per Q11), feeding **a swappable frame-source interface** — build this abstraction
-      first so the same detection code later runs against Gazebo, a different sim, or real
-      hardware unchanged
-- [ ] Detection: tag36h11, decision-margin filter, per-tag `solvePnP`
-      (`SOLVEPNP_ITERATIVE` — verified necessary on the IMX219; re-verify on whatever
-      camera model Gazebo uses, don't assume)
-- [ ] Fusion: quality-weighted multi-tag combine, with a disagreement metric used as an
-      **output gate**, not just a log line
-- [ ] Get the fused position into ArduPilot's control loop via `LANDING_TARGET` and
-      `PLND_*` params (`CLAUDE.md` §7 items 0–2c, §8) — verify these on the Gazebo SITL
-      build the same way the senior verified them on hardware, don't assume they carry over
-- [ ] **Gate ⭐⭐ — autonomous touchdown on the board in simulation**
+      IDs 1–4 at ±0.22 m on a 60 cm board) in the Gazebo world — **not done yet**; a
+      synthetic-camera stand-in (`sim/board.py` + `sim/synthetic_camera.py`) was built and
+      used instead, per the sim-first staging (Gazebo isn't set up in this repo yet). This
+      item is still open when Gazebo work actually starts.
+- [x] A downward camera feeding **a swappable frame-source interface**
+      (`src/frame_source.py`) — built first, so the same detection code will run against
+      Gazebo or real hardware unchanged later. Currently fed by the synthetic-camera stand-in
+      above, not Gazebo's `gz-transport` (that swap is exactly what this interface is for)
+- [x] Detection: tag36h11 via `cv2.aruco` (`src/detector.py`), per-tag `solvePnP`
+      (`SOLVEPNP_ITERATIVE`). Corner-order correctness verified empirically against the
+      real `cv2.aruco` detector across 4 poses (straight-down, yawed, tilted/off-center),
+      not just a self-consistent placebo check — confirmed 2026-09-17. Still missing:
+      decision-margin filtering (not yet needed against noise-free synthetic frames)
+- [x] Fusion: quality-weighted multi-tag combine with a disagreement gate
+      (`src/fusion.py`) — currently single-tag in practice (only the center tag has been
+      in range during tests so far); multi-tag disagreement behavior not yet exercised
+- [x] Get the fused position into ArduPilot's control loop via `LANDING_TARGET`
+      (`src/mavlink_out.py`, `PLND_TYPE=1`) — verified against live SITL 2026-09-15/17,
+      correct `MAV_FRAME_BODY_FRD` (not the `BODY_NED` bug in the thesis/Dinesh's script)
+- [x] **Gate ⭐⭐ — autonomous touchdown on the board in simulation.** Passed 2026-09-17
+      (`sim/run_landing.py`): full descent from ~7.5m tracked continuously via our own
+      detection → fusion → `LANDING_TARGET`, `PrecLand: Target Found` → `Init Complete`,
+      clean touchdown and disarm (`0.50 m/s` impact). One known gap: target briefly lost
+      right near touchdown, likely the synthetic camera's fixed FOV vs. the physically
+      large tag at very close range — didn't prevent a clean landing this run, but worth
+      tightening before treating close-range behavior as proven. **Caveat: this is the
+      synthetic-camera stand-in, not Gazebo** — re-verify once Gazebo replaces it (first
+      checklist item above)
 - [ ] Scripted N-landing campaign from randomised offsets → touchdown error, time-to-land,
       abort count
 - [ ] Descent-response tuning sweep — start from `PLND_ACC_P_NSE` (senior's #1 tuning

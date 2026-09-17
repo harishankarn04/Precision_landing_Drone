@@ -108,12 +108,31 @@ underneath.
       recommendation: reduce it, `CLAUDE.md` §8)
 - [ ] **Gate ⭐⭐⭐ — 20+ runs with reported mean / σ / max touchdown offset.**
       *This already exceeds the senior's thesis, which never closed the loop.*
+      ⚠️ **Blocked on an accuracy bug found 2026-09-18**: single-run touchdown was 0.70m
+      off centre, and the fused position visibly drifts progressively during descent
+      (near-zero at 5m altitude, `pX=+0.16 pY=-0.25` by 1.9m) — not just the near-touchdown
+      FOV loss noted above. Leading suspect: `sim/synthetic_camera.py` reads `ATTITUDE` and
+      `LOCAL_POSITION_NED` as independent MAVLink messages and uses whichever arrived most
+      recently for each, uncorrelated by timestamp — untested territory, since every prior
+      validation (the 4-pose corner-order check) used static poses, not a live closed loop
+      with continuously changing attitude. Also unset: `PLND_CAM_POS_X/Y/Z` (`CLAUDE.md`
+      §8 lists `Z=-0.05`, currently defaulted to zero). Don't run the 20-run campaign until
+      this is root-caused — it would just measure the bug, not real system accuracy.
 - [ ] Fallback ladder L1–L5 implemented and each rung deliberately demonstrated
       (`05-risks-and-failsafes.md` §B1) — `PLND_STRICT`, `PLND_RET_BEHAVE`,
       `PLND_RET_MAX`, `PLND_ALT_MIN/MAX`, `PLND_TIMEOUT`, `PLND_OPTIONS`
 
 ## Stage 2 — Beacon in simulation *(deferred until Stage 1 passes)*
 
+- [ ] **Architecture note (Hari, 2026-09-18):** the vision pipeline should run
+      **only during the final landing sequence**, not continuously from the start —
+      beacon/LoRa-based long-range homing brings the drone close first, *then* a camera/
+      detection switch-on happens for the terminal approach. Matches the pattern already
+      used in Nanda's PX4/LoRa reference project (`Documentation/nanda_lora_px4_reference/`
+      — `autoland_node.cpp`'s own state machine: patrol → LoRa homing → vision handoff at
+      close range). Not implemented yet — `sim/run_landing.py` currently runs vision
+      continuously for testing convenience; this is the intended production shape once
+      beacon fusion exists.
 - [ ] Decide the modality (`06-open-questions.md` Q3 — UWB recommended)
 - [ ] Port ROLAND's `gazebosensorplugins/src/UwbPlugin.cpp` — a Gazebo-Classic→gz-sim
       port either way; ROLAND's own stack is PX4, ours is ArduPilot, so the sensor plugin

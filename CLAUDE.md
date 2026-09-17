@@ -112,6 +112,7 @@ sensor-fusion architecture from the ROLAND paper.
 | `Documentation/ROLAND_....pdf` (6 pp) | ICCAS 2021 paper, KAIST (Kim, Lee, Choi, Jeon, Kim, Myung) | **Target architecture** for the moving-platform half — ROLAND is PX4-based, we're ArduPilot again (§0b), so port its ideas, not its autopilot integration. Code: https://github.com/engcang/ROLAND. See `docs/02-roland-reference.md` |
 | `Documentation/Synopsis Details_Format_Project_Phase_1.pdf` (3 pp) | **Our own Phase-1 synopsis**, as submitted | Defines the officially-approved objectives and the Jul–Nov 2026 timeline. See `docs/00-project-brief.md` |
 | `Documentation/dinesh_reference_code/` (received 2026-09-15) | Dinesh's actual production Python — not just the thesis PDF | Reference for Stage 1's fusion/velocity/jump-filter logic once that's being built. **Not run yet** (sim-first) — has a known frame-bug discrepancy vs `CLAUDE.md` §7 item 0, see its own README before trusting either version |
+| `Documentation/nanda_lora_px4_reference/` (received 2026-09-17) | Nanda's independent PX4+Gazebo+ROS2+MAVROS LoRa-EKF + AprilTag autoland project | Reference for **Stage 3** (beacon fusion) — PX4-specific, doesn't run on our ArduPilot decision (`docs/06-open-questions.md` Q11). Port the EKF math and the state-machine shape, not the ROS2/MAVROS scaffolding. See its own `PROJECT_README.md` |
 
 ---
 

@@ -288,12 +288,121 @@ scripted runs, with a mean/σ you can put in the report.
 
 # Stage 3 — Gazebo (Linux)
 
-*Detail to be written when Stage 2 passes.* Notes captured now so they aren't lost:
+**Started 2026-09-22.** ArduPilot SITL + Gazebo Harmonic + the `ardupilot_gazebo` plugin
+are now working end to end (arm, takeoff, fly in the Gazebo GUI) — on the Mac Mini (see
+below), not the Parallels VM. QGroundControl itself is **not** installed on either Linux
+machine — see the GCS architecture decision below for why.
 
-**Stack:** **Ubuntu (Parallels VM on Hari's M1 Mac) + Gazebo + ArduPilot SITL +
-`ardupilot_gazebo` plugin + QGroundControl.** Gazebo and ROS 2 Humble are already installed
-in that VM; ArduPilot SITL, the `ardupilot_gazebo` plugin, and QGroundControl still need
-adding.
+**Stack:** Gazebo Harmonic + ArduPilot SITL + `ardupilot_gazebo` plugin, on Linux (Parallels
+VM or the Mac Mini, see below) + **QGroundControl on Hari's own Mac**, connected over the
+LAN — not installed on the Linux side at all.
+
+> 💡 **GCS architecture decision (2026-09-22):** QGroundControl runs on Hari's Mac only.
+> Whichever machine is doing the actual Gazebo/SITL work (Mac Mini, or later the
+> teammate's Linux box) sends MAVLink to that Mac's LAN IP instead of running its own GCS.
+> This is what `sim/run_gazebo.sh`'s `GCS_IP` variable is for — point it at whichever
+> machine is running QGC, and the same script works unchanged regardless of which Linux
+> box is doing the simulation. Goal: "work on the Mac with QGC normally; when Gazebo work
+> is needed, use whichever Linux machine is available, and it just works."
+
+## A third machine: the Mac Mini (native Ubuntu, real GPU)
+
+2018 Intel Mac Mini i7 (i7-8700B, 6-core/12-thread, 62GB RAM, 327GB free disk), running
+**native Ubuntu 22.04** (not virtualized) — SSH-accessible, added 2026-09-22. Its Intel
+UHD 630 gives **real GPU rendering via Mesa's `iris` driver** (confirmed:
+`glxinfo | grep "OpenGL renderer"` → `Mesa Intel(R) UHD Graphics 630 (CFL GT2)`, OpenGL
+4.6) — a genuine upgrade over the Parallels VM's forced `llvmpipe` software rendering
+(structural limitation: no arm64 GPU passthrough exists in Parallels on Apple Silicon at
+all). Docker was found pre-installed but masked/disabled on this machine — consistent with
+the decision below not to use Docker anyway.
+
+Checking `glxinfo`/GPU capability over a bare SSH session fails with "unable to open
+display" — there's no X display in a non-interactive SSH shell. Workaround: this machine
+has an actual logged-in GNOME session (`gdm`), so `export DISPLAY=:1` and
+`export XAUTHORITY=/run/user/1000/gdm/Xauthority` (adjust the UID) targets that real
+session's display instead. The same trick is needed to launch Gazebo's GUI over SSH; if
+actually sitting at the machine, DISPLAY is already set correctly and none of this matters.
+
+**Docker was considered and rejected** (2026-09-22) for running Gazebo+SITL+QGC — it
+doesn't solve the actual constraint (GPU rendering; a container still needs the same host
+GPU passthrough or the same software-rendering fallback already in use), no current
+official ArduPilot/Gazebo Docker image exists for Gazebo Harmonic specifically, and
+QGroundControl has no established Docker-run pattern either. See
+`~/.claude/plans/all-done-setup-assuming-tidy-pelican.md` (if still present) for the full
+research behind this call.
+
+## Setup steps that actually worked (Mac Mini, Ubuntu 22.04)
+
+```bash
+# System deps (needs sudo -- run these yourself, not scriptable non-interactively)
+sudo apt update
+sudo apt install -y python3.10-venv libfuse2
+sudo apt install -y libgz-sim8-dev rapidjson-dev libopencv-dev libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-bad gstreamer1.0-libav \
+    gstreamer1.0-gl
+# (if apt complains about a package name, you likely hit a copy-paste line-wrap --
+#  install one package per line instead)
+
+# ArduPilot itself
+git clone --recursive https://github.com/ArduPilot/ardupilot.git ~/ardupilot
+cd ~/ardupilot
+Tools/environment_install/install-prereqs-ubuntu.sh -y
+. ~/.profile
+
+python3 -m venv ~/.venvs/ardupilot
+source ~/.venvs/ardupilot/bin/activate
+pip install empy==3.3.4 pexpect future pyyaml pymavlink MAVProxy
+
+./waf configure --board sitl
+./waf copter
+
+# The ardupilot_gazebo plugin (official ArduPilot Gazebo bridge, not the old khancyr one)
+git clone https://github.com/ArduPilot/ardupilot_gazebo.git ~/ardupilot_gazebo
+cd ~/ardupilot_gazebo
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+make -j$(nproc)
+```
+
+Gazebo Harmonic itself was installed via the official apt repo (`packages.osrfoundation.org`,
+`gz-harmonic` package) — already covered in the environment section below.
+
+### Two real gotchas found getting this to actually fly
+
+1. ⚠️ **`sim_vehicle.py -f gazebo-iris --model JSON` resolves which default params it
+   *should* load (prints the correct `default_params_filename` dict:
+   `["default_params/copter.parm", "default_params/gazebo-iris.parm"]`) but does NOT
+   actually forward them to the `arducopter` binary for "external" (JSON/Gazebo) frames** —
+   confirmed by checking the actual `RiTW: Starting ArduCopter : ...` command line, which
+   had no `--add-param-file` at all. Without those files, `FRAME_CLASS`/`FRAME_TYPE` stay
+   unset → `AP: Frame: UNSUPPORTED` → arming fails with `PreArm: Motors: Check frame class
+   and type`, even right after a `-w` (wipe-eeprom) fresh boot — this is a real
+   `sim_vehicle.py` gap for this ArduPilot version, not a stale-eeprom issue (ruled out by
+   checking the eeprom file's own mtime matched the fresh run). **Fix: pass both files via
+   `--add-param-file` explicitly yourself** — `sim/run_gazebo.sh` does this automatically.
+2. ⚠️ **`mavproxy.py` isn't on `PATH` unless the venv is activated first** — obvious in
+   hindsight, but easy to miss when launching non-interactively (e.g. via `nohup` or a
+   script), since an interactive shell that's already `source`d the venv once won't notice
+   it's missing. Fails with `[Errno 2] No such file or directory: 'mavproxy.py'`.
+   `sim/run_gazebo.sh` activates `~/.venvs/ardupilot` itself for exactly this reason —
+   `set +u` / `set -u` bracket the `source`, since venv activate scripts reference `$PS1`,
+   which is unset under `set -u` in a non-interactive script.
+
+## `sim/run_gazebo.sh`
+
+New portable launch script (same design as `sim/run_sitl.sh`: env-var overrides, sensible
+default clone locations, clear errors instead of silent failure) that launches Gazebo +
+the plugin + SITL together, with MAVLink sent to a **required** `GCS_IP` (no silent
+default — UDP `--out` is "send to this address," and a wrong guess drops every packet with
+no error anywhere):
+
+```bash
+GCS_IP=<IP of the machine running QGroundControl> ./sim/run_gazebo.sh
+```
+
+Must be run from a real graphical terminal session on the Linux machine (not a bare
+non-interactive SSH command) — Gazebo's GUI needs a real `DISPLAY` to render into; the
+script checks for this and fails with a clear message rather than hanging.
 
 > 🟡 **ROS 2 is an open question, not a settled part of this stage** — see
 > `06-open-questions.md` Q11. The professor asked for ROS 2, but nothing in the pipeline

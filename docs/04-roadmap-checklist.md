@@ -36,10 +36,16 @@ Status legend: ⬜ not started · 🔄 in progress · ✅ done · ⛔ blocked ·
 No detailed steps here yet, deliberately — write them as they're actually verified, not
 ahead of time. The shape of it, matching what worked before conceptually:
 
-- [ ] Gazebo installed and a stock world/vehicle runs
-- [ ] ArduPilot SITL builds and flies in that world with no custom code — arm, takeoff,
-      land, via the `ardupilot_gazebo` plugin or whatever route proves out
-- [ ] QGroundControl connects to SITL and can command/monitor the vehicle
+- [x] Gazebo installed and a stock world/vehicle runs — **2026-09-22, on the Mac Mini**
+      (native Ubuntu, real GPU rendering), not the Parallels VM. `docs/07-sim-setup.md`
+      Stage 3 has the exact steps and two real gotchas hit getting here
+- [x] ArduPilot SITL builds and flies in that world with no custom code — arm, takeoff
+      confirmed 2026-09-22 via the `ardupilot_gazebo` plugin (Iris quad, `iris_runway.sdf`,
+      `-f gazebo-iris --model JSON`). Landing not yet exercised on Gazebo specifically
+- [ ] QGroundControl connects to SITL and can command/monitor the vehicle — architecture
+      decided 2026-09-22 (QGC stays on Hari's Mac; Linux side sends MAVLink to it over the
+      LAN via `sim/run_gazebo.sh`'s `GCS_IP`, not installed on Linux at all) but not yet
+      confirmed working end-to-end with the new `run_gazebo.sh` script
 - [ ] Vehicle commanded and read via MAVLink/`pymavlink` (default — no ROS 2 needed for
       this). Only add a ROS 2 bridge (`mavros` or similar) if `06-open-questions.md` Q11
       resolves to "ROS 2 is actually required"

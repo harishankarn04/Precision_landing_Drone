@@ -181,22 +181,25 @@ Beacon work does **not** start before a flying, landing sim drone exists.
 
 ---
 
-## 5. Environment (as of 2026-09-09)
+## 5. Environment (updated 2026-09-22)
 
 | Machine | Owner | Role |
 |---|---|---|
-| **Apple M1, 16 GB, macOS 15.7.3, arm64**, ~60 GB free | Hari — *the only physical machine he has* | Dev machine (native Mac work + host for the Parallels VM below) |
-| **Ubuntu 22.04 arm64 VM under Parallels, on the M1** (6 vCPU / 12 GB RAM) | Hari | **Gazebo Harmonic (`gz-harmonic`, gz sim 8.15.0) and ROS 2 Humble Desktop already installed** — the only piece of the new stack that's actually set up anywhere so far. Gazebo Harmonic wasn't a free choice: no arm64 build of Gazebo Classic exists. `ros-humble-ros-gz-bridge`/`-interfaces`/`-image` are present, but `ros_gz_sim` (the launch wrapper) isn't published for arm64/Humble via apt — build from source or launch `gz sim` + bridge topics manually if needed. ArduPilot SITL, the ArduPilot↔Gazebo bridge, and QGroundControl are not yet installed. See `docs/07-sim-setup.md` Stage 3 for the rendering gotcha (Ogre2+virgl crash, fixed with `LIBGL_ALWAYS_SOFTWARE=1`) |
-| **Linux Mint + 40-series NVIDIA GPU** | teammate | Results-grade Gazebo runs. Synced via **GitHub** |
+| **Apple M1, 16 GB, macOS 15.7.3, arm64**, ~60 GB free | Hari — his own Mac | Dev machine (native Mac work + host for the Parallels VM below). **QGroundControl runs here** — decided 2026-09-22 that QGC lives only on this Mac, with whichever Linux machine is doing Gazebo work sending MAVLink to it over the LAN (`sim/run_gazebo.sh`'s `GCS_IP`), rather than installing QGC on Linux at all |
+| **Ubuntu 22.04 arm64 VM under Parallels, on the M1** (6 vCPU / 12 GB RAM) | Hari | Gazebo Harmonic + ROS 2 Humble Desktop installed. ArduPilot SITL clone+configure done; the `./waf copter` build was started but interrupted (paused mid-build 2026-09-22, not finished) — resume with `cd ~/ardupilot && source ~/.venvs/ardupilot/bin/activate && ./waf copter`. Forced to software rendering (`LIBGL_ALWAYS_SOFTWARE=1`) — no arm64 GPU passthrough exists in Parallels on Apple Silicon at all, a structural limit, not a bug to fix. See `docs/07-sim-setup.md` Stage 3 |
+| **Mac Mini (2018 Intel i7-8700B, 6-core/12-thread, 62GB RAM, 327GB free), native Ubuntu 22.04** | Hari, SSH-accessible | **Added 2026-09-22 — the working Gazebo dev machine right now.** ArduPilot SITL + the official `ardupilot_gazebo` plugin (Harmonic) both built and confirmed flying (arm/takeoff in the Gazebo GUI). Real GPU rendering via Intel UHD 630's Mesa `iris` driver (OpenGL 4.6) — a genuine upgrade over the VM's forced software rendering. Docker present but masked/disabled (deliberately, by whoever set this machine up before — consistent with the decision not to use Docker for this project, see `docs/07-sim-setup.md`). Use `sim/run_gazebo.sh` to launch |
+| **Linux Mint + 40-series NVIDIA GPU** | teammate | Results-grade Gazebo runs, once needed. Synced via **GitHub**. Not available as of 2026-09-22 |
 | ~1660-class NVIDIA laptop | teammate | Secondary |
 | MATLAB | all three | EKF design (later stage) |
 
 **Set up in this repo:** `.venv/` (Python 3.13 · `pymavlink` · `MAVProxy` ·
-`opencv-contrib-python` 5.0 · `numpy`). **Set up on Hari's machine, outside the repo:**
-Gazebo + ROS 2 Humble in the Parallels Ubuntu VM. **Not yet set up anywhere:** ArduPilot
-SITL, the ArduPilot↔Gazebo bridge, QGroundControl. No decision has been made yet on
-whether Gazebo/ArduPilot work happens in that VM, natively on Linux Mint, or both — figure
-that out when actually starting, don't pre-plan it speculatively.
+`opencv-contrib-python` 5.0 · `numpy`) on the Mac. **Set up on the Mac Mini:** ArduPilot
+SITL, Gazebo Harmonic, the `ardupilot_gazebo` plugin, all built and working — see
+`docs/07-sim-setup.md` Stage 3 for the exact steps and two real gotchas hit getting there.
+**Not set up anywhere yet:** the board-in-Gazebo world (still using the plugin's stock
+`iris_runway.sdf`), and a `GazeboSource` implementing `src/frame_source.py` to read the
+real camera feed (still using the synthetic-camera stand-in for the actual perception
+pipeline) — both are the next real Stage 3 work, not yet started.
 
 `~/Documents/gitClone/ardupilot` still exists on disk from the previous stack (SITL build
 artifacts etc.) but is no longer part of the plan — leave it alone, don't clean it up

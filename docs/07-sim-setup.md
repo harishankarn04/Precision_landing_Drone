@@ -394,15 +394,34 @@ New portable launch script (same design as `sim/run_sitl.sh`: env-var overrides,
 default clone locations, clear errors instead of silent failure) that launches Gazebo +
 the plugin + SITL together, with MAVLink sent to a **required** `GCS_IP` (no silent
 default — UDP `--out` is "send to this address," and a wrong guess drops every packet with
-no error anywhere):
+no error anywhere) *and* to localhost at the same time, so a GCS running on the Linux
+machine itself also works without needing a separate flag:
 
 ```bash
-GCS_IP=<IP of the machine running QGroundControl> ./sim/run_gazebo.sh
+GCS_IP=<IP of the machine running your GCS> ./sim/run_gazebo.sh
 ```
 
 Must be run from a real graphical terminal session on the Linux machine (not a bare
 non-interactive SSH command) — Gazebo's GUI needs a real `DISPLAY` to render into; the
 script checks for this and fails with a clear message rather than hanging.
+
+### GCS choice: QGC on Mac, Mission Planner (via Mono) on Linux
+
+**QGroundControl's AppImage does not run on Ubuntu 22.04** (confirmed 2026-09-22, Mac
+Mini) — it requires `GLIBC >= 2.38` / `GLIBCXX >= 3.4.32`; 22.04 ships older versions
+(glibc 2.35). Not a quick fix, and this would likely bite any Ubuntu-22.04-class machine
+(the friend's Linux box included), not just this one.
+
+**Decision: QGroundControl stays on Hari's Mac** (works fine there, no change) — **Mission
+Planner via Mono is the GCS for whichever Linux machine is doing the actual Gazebo work**
+(mission/waypoint editing during testing), not QGC. This isn't a downgrade — Mission
+Planner via Mono is already independently confirmed working end-to-end on Linux Mint
+(`sim/README.md` §3b, 2026-09-11: connects, flies, precision-lands) — Mono's runtime is
+far less version-sensitive across different Linux machines than a specific AppImage's
+glibc target, making it the actually-portable choice for "clone this repo on any Linux
+box and it works," not a fallback. Setup is the same three lines already in
+`sim/README.md` §3b (`sudo apt install mono-complete`, download+extract, `mono
+MissionPlanner.exe`, connect UDP 14550 on `127.0.0.1`) — no changes needed there.
 
 > 🟡 **ROS 2 is an open question, not a settled part of this stage** — see
 > `06-open-questions.md` Q11. The professor asked for ROS 2, but nothing in the pipeline

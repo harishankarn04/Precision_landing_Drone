@@ -80,10 +80,13 @@ functions are available on Linux," so don't expect full Windows parity, but core
 flying/telemetry works fine.
 
 ```bash
-sudo apt install mono-complete mono-runtime libmono-system-windows-forms4.0-cil \
-    libmono-system-core4.0-cil libmono-winforms4.0-cil libmono-corlib4.0-cil \
-    libmono-system-management4.0-cil libmono-system-xml-linq4.0-cil
+sudo apt install mono-complete
 ```
+
+`mono-complete` alone is enough on Ubuntu 22.04 — it's a meta-package that pulls in
+everything needed. The individual `libmono-system-windows-forms4.0-cil` /
+`libmono-winforms4.0-cil` / etc. packages from older guides aren't required (and may not
+even resolve as separate packages on 22.04) — confirmed 2026-09-22 on the Mac Mini.
 
 Download the latest Mission Planner zip from ArduPilot's firmware site, extract it, then:
 

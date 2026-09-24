@@ -20,6 +20,46 @@ PLND_ENABLED     1     # enable-flag: without this, every other PLND_* param is 
 PLND_TYPE        1     # 1 = MAVLink companion computer (src/mavlink_out.py). Was 4
                        # (ArduPilot's own SITL simulated target) through Stage 1.
 
+# PLND_EST_TYPE=0 (RAW_SENSOR), not ArduPilot's own default of 1 (KALMAN_FILTER) --
+# found 2026-09-24 after repeated "PrecLand: Target Found" -> "PrecLand: Init Failed"
+# cycling in real Gazebo tests, never reaching "Init Complete". Root-caused by reading
+# AC_PrecLand.cpp directly: EstimatorType::KALMAN_FILTER requires an update at least
+# every EKF_INIT_SENSOR_MIN_UPDATE_MS (500ms) for a full EKF_INIT_TIME_MS (2000ms)
+# window before target_acquired() ever returns true -- any single gap over 500ms during
+# that window restarts the whole cycle. EstimatorType::RAW_SENSOR sets
+# _target_acquired=true on the very first valid measurement, no warm-up at all.
+# Confirmed as the deliberate, tested choice in a teammate's independently-built,
+# formally-accepted reference project (github.com/format37/courierquad,
+# sim/params/m0_sitl.param and m1_sitl.param both use EST_TYPE=0), not a guess.
+PLND_EST_TYPE    0
+
+# PLND_STRICT=1 (ArduPilot's own default -- "Retry Landing, Normal Strictness"), NOT
+# the 0 ("Land Vertically, Not strict") this file had until 2026-09-24. That 0 was
+# copied from a teammate's reference project (courierquad) without noticing WHY their
+# board doesn't need retry: their board carries two co-planar tags (a large "outer" one
+# for range, a small "inner" one for final descent) sized so something is always in
+# frame. Our board has no such handoff -- our tag genuinely can leave the frame during
+# descent, which is exactly what a live Gazebo test hit 2026-09-24: correction started,
+# the tag left the FOV, and it landed off-target with no recovery attempt.
+#
+# ArduPilot already has a full built-in retry/climb mechanism for exactly this
+# (AC_PrecLand_StateMachine.cpp: on a real target-lost timeout it climbs
+# RETRY_OFFSET_ALT_M=1.5m and re-attempts, up to PLND_RET_MAX times) -- confirmed this
+# works with our PLND_EST_TYPE=0 (RAW_SENSOR) setup too: target_acquired()'s staleness
+# timeout (which feeds the retry trigger) is estimator-agnostic, not RAW_SENSOR-specific.
+# PLND_ALT_MIN/PLND_ALT_MAX (a separate pair of retry-gating params) explicitly require
+# a rangefinder we don't have -- left at their own defaults, effectively inert without
+# one, but the actual retry trigger below (PLND_TIMEOUT) is purely time-based and needs
+# no rangefinder.
+PLND_STRICT      1
+PLND_RET_MAX     4    # ArduPilot's own default -- max retry attempts before giving up
+PLND_TIMEOUT     4    # ArduPilot's own default -- seconds to keep descending after
+                      # target loss before actually retrying; revisit if 4s of blind
+                      # descent is too long given how close to the ground our tag
+                      # tends to disappear
+PLND_RET_BEHAVE  0    # 0 = climb back to the last known target location (not just an
+                      # approximate one) -- ArduPilot's own default
+
 # Descent-response tuning, 2026-09-18. A live run landed 0.70m off centre with the
 # fused position drifting during descent. Root-caused via an offline replay of the
 # actual flight's true (perfectly synchronised) attitude+position through our own

@@ -3,6 +3,18 @@ import numpy as np
 from typing import Dict, Any, List
 
 class ArucoDetector:
+    # Substitute for the senior's "reject decision margin < 25" spec (CLAUDE.md section
+    # 3) -- cv2.aruco doesn't expose a continuous decision-margin score the way
+    # pupil-apriltags does (confirmed by a teammate's independent reference project,
+    # github.com/format37/courierquad, which uses pupil-apriltags specifically for that
+    # metric). solvePnP's own reprojection error serves the same purpose with what this
+    # library actually gives us: a marginal/garbage corner detection produces a poor
+    # pose fit, which shows up directly as high reprojection error. Found 2026-09-24
+    # after live Gazebo tests showed detection flickering frame-to-frame with no
+    # filtering at all -- some fraction of those "detections" were likely exactly this
+    # kind of weak/marginal corner fit feeding bad data downstream.
+    MAX_REPROJECTION_ERROR_PX = 5.0
+
     def __init__(self, camera_matrix: np.ndarray, dist_coeffs: np.ndarray, tag_dict: Dict[int, Any]):
         """
         tag_dict is typically the TAGS dict from sim.board
@@ -66,7 +78,17 @@ class ArucoDetector:
                     )
 
                     if success:
-                        results[tag_id] = (rvec, tvec)
+                        reprojected, _ = cv2.projectPoints(
+                            self.obj_pts[tag_id], rvec, tvec,
+                            self.camera_matrix, self.dist_coeffs
+                        )
+                        reproj_error_px = float(np.mean(
+                            np.linalg.norm(reprojected.reshape(4, 2) - img_pts, axis=1)
+                        ))
+                        if reproj_error_px <= self.MAX_REPROJECTION_ERROR_PX:
+                            results[tag_id] = (rvec, tvec)
+                        # else: marginal/garbage corner fit, silently dropped -- same
+                        # tag_id simply won't appear in results this frame.
 
         return results, corners, ids
 

@@ -1,12 +1,26 @@
+import time
 import cv2
 import numpy as np
 from typing import Dict, Any, List, Optional
 from sim.board import TAGS
 
 class TagFusion:
-    def __init__(self, disagreement_threshold_m=0.15):
+    def __init__(self, disagreement_threshold_m=0.15, loss_debounce_s=0.5):
+        """
+        loss_debounce_s: coast on the last good fused result for up to this many
+        seconds of missed frames before actually reporting the target as lost --
+        matches a teammate's independent reference project (github.com/format37/
+        courierquad, DetectorCfg.loss_debounce_s), which measured the same real
+        frame-to-frame detection flicker we saw (their notes: "~50-80% hit rate at
+        5-8m") and found that reacting to every single miss as "lost" caused far more
+        disruption than the flicker itself. Found 2026-09-24 after a live Gazebo test
+        showed correction starting then stalling/losing the target mid-descent.
+        """
         self.disagreement_threshold_m = disagreement_threshold_m
-        
+        self.loss_debounce_s = loss_debounce_s
+        self._last_good = None
+        self._last_good_t = 0.0
+
     def _camera_to_body_frame(self, cam_x, cam_y, cam_z):
         """
         Converts camera frame coordinates to vehicle body frame.
@@ -24,6 +38,22 @@ class TagFusion:
         return body_x, body_y, dist
 
     def fuse_tags(self, results: Dict[int, Any], corners: np.ndarray, ids: np.ndarray, image_shape) -> Optional[Dict[str, Any]]:
+        """
+        Public entry point: computes this frame's fresh fusion, then applies the
+        coast/debounce described in __init__ -- a miss this frame doesn't immediately
+        report "lost" if a good result landed within loss_debounce_s.
+        """
+        fresh = self._compute_fresh(results, corners, ids, image_shape)
+        now = time.time()
+        if fresh is not None:
+            self._last_good = fresh
+            self._last_good_t = now
+            return fresh
+        if self._last_good is not None and (now - self._last_good_t) <= self.loss_debounce_s:
+            return self._last_good
+        return None
+
+    def _compute_fresh(self, results: Dict[int, Any], corners: np.ndarray, ids: np.ndarray, image_shape) -> Optional[Dict[str, Any]]:
         """
         results: dict from detector tag_id -> (rvec, tvec)
         corners: raw corners from aruco

@@ -172,6 +172,17 @@ fi
 # "external" (JSON/Gazebo) frames -- a real gap in this ArduPilot version's sim_vehicle.py,
 # found and worked around 2026-09-22. Without this, FRAME_CLASS/FRAME_TYPE stay unset and
 # arming fails with "PreArm: Motors: Check frame class and type" / "Frame: UNSUPPORTED".
+#
+# sim/precision_landing.parm is ALSO required here, and was missing entirely until
+# 2026-09-24 -- PLND_ENABLED/PLND_TYPE (which turn precision landing on at all) only
+# exist in that file, not in ArduPilot's own default_params/. Without it, every Gazebo
+# mission run so far had precision landing fully DISABLED regardless of whether
+# LANDING_TARGET messages were well-formed: the vehicle detects the tag, "corrects"
+# nothing, and lands wherever the mission's own GPS waypoint said to -- exactly the
+# symptom hit testing sim/test_mission_precision.waypoints. Loaded LAST so it can't be
+# shadowed by the two files above (later --add-param-file wins on a shared key; none of
+# copter.parm/gazebo-iris.parm actually set PLND_* anyway, so this is defensive, not
+# currently load-bearing).
 # --console opens MAVProxy's own Tk/wx GUI status window -- skip it under Xvfb/headless
 # (same "no display" problem gz-sim itself hit above). The actual MAVProxy command
 # prompt (wp load, mode LAND, etc.) is on this terminal's stdin/stdout regardless of
@@ -184,6 +195,7 @@ fi
 exec Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON \
     --add-param-file="$AP/Tools/autotest/default_params/copter.parm" \
     --add-param-file="$AP/Tools/autotest/default_params/gazebo-iris.parm" \
+    --add-param-file="$HERE/precision_landing.parm" \
     --out="udp:${GCS_IP}:${OUT_PORT}" \
     --out="udp:127.0.0.1:${COMPANION_PORT}" \
     "${LOCAL_OUT_ARGS[@]}" \

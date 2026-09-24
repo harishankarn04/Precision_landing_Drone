@@ -84,12 +84,25 @@ PLND_ALT_MAX     0
 # lateral offset even directly above the target -- MAV_FRAME_BODY_FRD is supposed to
 # carry exactly this, with ArduPilot's own EKF rotating it into earth-frame using its
 # more accurate internal attitude estimate). Not a bug in the camera/fusion geometry.
-# The likelier cause: PLND_ACC_P_NSE was still at ArduPilot's aggressive default (2.5),
-# despite the thesis's own #1 tuning recommendation (CLAUDE.md section 8) to reduce it --
-# an underdamped estimator overshoots/overcorrects during exactly the high-attitude
-# excursions measured above. Halved as a first trial, not yet re-validated with a live
-# flight -- revisit this value based on the next test's actual touchdown offset.
+# NOTE 2026-09-24: this param only affects EstimatorType::KALMAN_FILTER -- since
+# switching to PLND_EST_TYPE=0 (RAW_SENSOR, see above) this value is now INERT, left
+# here only as a record of the earlier tuning attempt, not because it does anything.
 PLND_ACC_P_NSE   1.25
+
+# WPNAV_ACCEL, found 2026-09-24 by correlating a live flight's own dataflash log
+# (00000028.BIN) against its vision log (logs/vision_20260924_174608.csv): the tag was
+# only ever tracked in short 2-4s bursts before being lost again, repeatedly ("PrecLand:
+# Target Found" -> "Target Lost" every 2.4-4.3s across the whole flight), and the fused
+# body_x offset stayed frozen around -1.1m across MULTIPLE full retry cycles -- not
+# oscillating, just never closing. Our camera is fixed (not gimbaled), so a lateral
+# correction requires the vehicle to TILT to accelerate sideways, and that tilt swings
+# the camera's already-narrow ~66deg FOV off-axis -- an aggressive correction can push
+# the tag straight out of frame before it converges, which is exactly the repeating
+# find/lose pattern in the log. mode_land.cpp confirms LAND's horizontal correction uses
+# wp_nav->get_wp_acceleration_mss(), i.e. this param -- lowered from ArduPilot's own
+# default (250 cm/s^2 = 2.5 m/s^2) to reduce tilt during correction, trading speed for
+# keeping the tag in view long enough to actually converge. Not yet re-validated live.
+WPNAV_ACCEL      100
 
 # Camera-to-CG mounting offset. Left at zero because the synthetic camera has no
 # physical offset to model (unlike CLAUDE.md section 8's PLND_CAM_POS_Z=-0.05 for the

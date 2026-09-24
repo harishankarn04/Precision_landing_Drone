@@ -1,0 +1,70 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="iris_downward_camera">
+    <!--
+      iris_with_ardupilot (the plugin's own ArduPilot-integrated Iris, unchanged) plus
+      a single FIXED downward camera link -- deliberately not gimbaled, unlike the
+      plugin's own gimbal_small_3d example, since precision landing needs a fixed known
+      camera pose, not a steerable one.
+
+      Camera sensor block modeled on Documentation/nanda_lora_px4_reference's
+      x500_lora/model.sdf (pose pitch=pi/2 for straight-down, explicit <topic> so the
+      Python side has a fixed known name instead of gz-sim's auto-generated topic
+      naming). No <plugin> block needed -- gz-sim's built-in Sensors system publishes
+      the configured topic via gz-transport automatically once the sensor exists.
+
+      base_link resolution: iris_with_ardupilot includes iris_with_standoffs (confirmed
+      via `grep '<link name' .../iris_with_standoffs/model.sdf` -> 'base_link' is the
+      real link, per the same pattern iris_with_gimbal's own gimbal_joint uses:
+      <parent>iris_with_standoffs::base_link</parent>). Since we include
+      iris_with_ardupilot (one level further out than iris_with_gimbal does), the fully
+      qualified nested scope is used below -- NOT verified against a live Gazebo load
+      yet (that's the first verification step before any Python is involved); if gz sim
+      reports this joint's parent as unresolvable, that's the first thing to fix.
+    -->
+    <include>
+      <uri>model://iris_with_ardupilot</uri>
+    </include>
+
+    <link name="downward_camera_link">
+      <pose>0 0 -0.05 0 1.5708 0</pose>
+      <inertial>
+        <mass>0.001</mass>
+        <inertia>
+          <ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz>
+          <ixy>0.0</ixy><ixz>0.0</ixz><iyz>0.0</iyz>
+        </inertia>
+      </inertial>
+      <sensor name="downward_camera" type="camera">
+        <camera>
+          <!--
+            1.1490 rad (~65.9deg), not 90deg -- matches the senior's actual calibrated
+            Pi Camera V2 (fx=497.88 at 640x480, docs/01-inherited-system.md:99):
+            hfov = 2*atan(width / (2*fx)) = 2*atan(320/497.88). The stock 90deg placeholder
+            spread a 0.6m board over too few pixels to detect reliably except very close
+            to the ground (found 2026-09-23, live Gazebo mission test) -- this must stay
+            in sync with src/gazebo_source.py's CAMERA_HORIZONTAL_FOV_RAD.
+          -->
+          <horizontal_fov>1.1490</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>100</far>
+          </clip>
+        </camera>
+        <always_on>1</always_on>
+        <update_rate>30</update_rate>
+        <visualize>true</visualize>
+        <topic>precision_landing/camera/image_raw</topic>
+      </sensor>
+    </link>
+
+    <joint name="downward_camera_joint" type="fixed">
+      <parent>iris_with_ardupilot::iris_with_standoffs::base_link</parent>
+      <child>downward_camera_link</child>
+    </joint>
+  </model>
+</sdf>

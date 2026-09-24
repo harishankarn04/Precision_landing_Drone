@@ -77,7 +77,7 @@ class LandingTargetSender:
         # discards the message outright (CLAUDE.md section 7 item 2).
         size = float(2.0 * np.arctan2(tag_size_m / 2.0, max(dist_m, 0.1)))
 
-        time_usec = int((time.time() - self.boot_time) * 1e6)
+        time_usec = self._boot_relative_time_usec()
 
         self.master.mav.landing_target_send(
             time_usec,
@@ -89,6 +89,37 @@ class LandingTargetSender:
             size,
             size,
         )
+
+    def _boot_relative_time_usec(self):
+        """
+        CLAUDE.md section 7 item 1: this field needs boot-relative microseconds
+        (matching the FLIGHT CONTROLLER's own clock), not time since this Python script
+        started -- the previous behaviour here. A script's own uptime is arbitrarily far
+        from the vehicle's real boot-relative clock, which has usually been running much
+        longer already by the time this script connects (e.g. after a mission's already
+        underway) -- ArduPilot's LANDING_TARGET staleness check then silently discards
+        every single message as implausibly old. This explains a real symptom hit
+        2026-09-24 in a live Gazebo mission test: send() reported success every call,
+        detections were happening, but the vehicle never visibly corrected laterally at
+        all -- the messages were being sent, just discarded on arrival.
+
+        Fixed by reading the most recent ATTITUDE/LOCAL_POSITION_NED message's own
+        time_boot_ms (both already stream on this link by ArduPilot's default per-link
+        behaviour -- confirmed working already, since src/frame_source.py's pose_hint
+        has relied on exactly these two message types since Stage 2) via pymavlink's
+        own per-type message cache (mavutil.mavfile.messages), rather than re-deriving a
+        wall-clock offset. One frame period of staleness (~33ms at 30Hz) is negligible
+        next to PLND_LAG's 0.25s budget.
+        """
+        for msg_type in ("ATTITUDE", "LOCAL_POSITION_NED"):
+            msg = self.master.messages.get(msg_type)
+            if msg is not None and hasattr(msg, "time_boot_ms"):
+                return int(msg.time_boot_ms) * 1000
+        # No telemetry seen yet on this link (e.g. the very first frame) -- fall back to
+        # script uptime rather than crash. Still wrong in the same way as before, but
+        # only for however many frames it takes the first ATTITUDE/LOCAL_POSITION_NED to
+        # arrive, not the entire flight.
+        return int((time.time() - self.boot_time) * 1e6)
 
     def close(self):
         if self.own_connection:

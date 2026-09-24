@@ -148,3 +148,108 @@ at all by default — and it refuses to arm unless it believes the throttle stic
 (channel 3 = throttle, in ArduCopter's standard mapping). `rc 3 1000` manually injects that
 "stick at minimum" value so the arm check passes. It's not needed once flying — GUIDED and
 AUTO command thrust directly and ignore raw RC3 — it only matters at the moment of arming.
+
+---
+
+## 5. Gazebo — the real AprilTag board + downward camera (current stage)
+
+Everything above (Stages 1–2, `run_sitl.sh`) uses a synthetic-camera stand-in — no real
+rendering, no real Gazebo. This section is the actual Gazebo stage: a real board model, a
+real downward camera, real rendered images going through the same detection/fusion code.
+
+**Only tested on the Mac Mini (native Ubuntu 22.04, real GPU) as of 2026-09-24.** A
+Parallels-VM path was also built and works (`GZ_WORLD`/Xvfb auto-detection in
+`run_gazebo.sh`) but is too slow to be useful even after optimizing rendering cost — see
+`../docs/07-sim-setup.md` Stage 3 for what was tried. **Decision: Gazebo work happens on
+the Mac Mini (or an equivalent native-Linux machine with a real GPU) only, going forward.**
+
+### One-time setup (native Ubuntu, real GPU)
+
+```bash
+sudo apt update
+sudo apt install -y python3.10-venv libfuse2 \
+    libgz-sim8-dev rapidjson-dev libopencv-dev libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-bad gstreamer1.0-libav \
+    gstreamer1.0-gl
+
+# ArduPilot itself (Stage 1's steps, if not already done)
+git clone --recursive https://github.com/ArduPilot/ardupilot.git ~/ardupilot
+cd ~/ardupilot && Tools/environment_install/install-prereqs-ubuntu.sh -y && . ~/.profile
+python3 -m venv ~/.venvs/ardupilot
+source ~/.venvs/ardupilot/bin/activate
+pip install empy==3.3.4 pexpect future pyyaml pymavlink MAVProxy opencv-contrib-python numpy
+./waf configure --board sitl && ./waf copter
+
+# The ardupilot_gazebo plugin (official ArduPilot repo, not the older khancyr fork)
+git clone https://github.com/ArduPilot/ardupilot_gazebo.git ~/ardupilot_gazebo
+cd ~/ardupilot_gazebo && mkdir build && cd build
+GZ_VERSION=harmonic cmake ..
+make -j$(nproc)
+```
+
+Gazebo Harmonic itself (`gz-harmonic`, and the `python3-gz-transport13`/`python3-gz-msgs10`
+apt packages `src/gazebo_source.py` needs) comes from the official
+`packages.osrfoundation.org` apt repo — see `../docs/07-sim-setup.md` Stage 3 for the
+one-time repo-add step if it's not already configured.
+
+### Every time: run it
+
+```bash
+# Terminal 1 -- Gazebo + the plugin + ArduPilot SITL together
+GCS_IP=<IP of whichever machine is running QGroundControl/Mission Planner> ./sim/run_gazebo.sh
+```
+
+Then, once armed and flying (same `wp load` / `mode AUTO` flow as Stage 1, using
+`sim/test_mission_precision.waypoints` — see below):
+
+```bash
+# Terminal 2 -- the real vision pipeline, reading Gazebo's actual rendered camera
+source ~/.venvs/ardupilot/bin/activate
+python3 sim/run_landing.py --source gazebo
+```
+
+`--source gazebo` is the only thing that changed from Stage 2's synthetic-camera version —
+`--source synthetic` (the default) still works unchanged, same `ArucoDetector`/`TagFusion`/
+`LandingTargetSender` code either way, per `src/frame_source.py`'s whole point.
+
+### Flying the AprilTag-only landing test
+
+`sim/test_mission_precision.waypoints` is deliberately different from
+`sim/test_mission.waypoints`: its final `NAV_LAND` waypoint is offset **1m** from the
+board's real position (anchored to ArduPilot's default CMAC home coords,
+`-35.3632620, 149.1652370`, matching this Gazebo world's `<spherical_coordinates>` — NOT
+Amrita's coordinates, a mismatch that silently sends the mission to the wrong side of the
+planet if you copy Stage 1's Amrita-based waypoint file here instead). GPS/mission nav
+alone would touch down 1m off-target; a landing that actually centers on the tag proves the
+AprilTag correction (not GPS) is what put it there — that's the actual point of this
+mission, not just "fly somewhere and land."
+
+```
+wp load <full path to this repo>/sim/test_mission_precision.waypoints
+mode GUIDED
+rc 3 1000
+arm throttle
+mode AUTO
+```
+
+### Known real bugs already found and fixed here (don't re-debug these from scratch)
+
+- **`run_gazebo.sh` was missing the companion-port `--out`** that `run_sitl.sh` already
+  had — without it, nothing is ever sent to port 14540 at all, so `run_landing.py` times out
+  waiting for a heartbeat. Fixed 2026-09-23.
+- **Camera FOV was 90°, not the real hardware's ~65.9°** (`fx=497.88` at 640×480, per
+  `../docs/01-inherited-system.md:99`) — the wider FOV spread the 0.6m board over too few
+  pixels to detect except very close to the ground. Fixed in both
+  `sim/gazebo_models/iris_downward_camera/model.sdf` and
+  `src/gazebo_source.py`'s `CAMERA_HORIZONTAL_FOV_RAD` (must stay in sync between the two).
+- **`LANDING_TARGET`'s timestamp was script-uptime, not the flight controller's
+  boot-relative clock** (`src/mavlink_out.py`) — CLAUDE.md §7 item 1's exact gotcha.
+  ArduPilot's staleness check silently discarded every message because they all looked
+  implausibly old; `send()` reported success every time, but the vehicle never actually
+  moved in response. Fixed by reading real `time_boot_ms` off the most recent
+  `ATTITUDE`/`LOCAL_POSITION_NED` message instead.
+- **`GazeboSource.get_frame()` returned its cached frame by reference, not a copy** — since
+  `run_landing.py` draws detection overlays directly onto whatever it gets back, and the
+  main loop runs faster than the camera's 30Hz update rate, this corrupted the cached frame
+  with overlay graphics about half the time, causing an exact 1:1 detected/lost alternation
+  regardless of altitude. Fixed by returning `.copy()`.

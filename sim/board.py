@@ -26,6 +26,7 @@ class Tag:
 CENTER_TAG_SIZE_M = 0.24
 CORNER_TAG_SIZE_M = 0.08
 CORNER_OFFSET_M = 0.22
+BOARD_SIZE_M = 0.6      # physical extent of the printed/rendered board, square
 
 TAGS: dict[int, Tag] = {
     0: Tag(id=0, size_m=CENTER_TAG_SIZE_M, offset_x_m=0.00, offset_y_m=0.00),
@@ -60,3 +61,41 @@ def tag_corners_board_frame(tag: Tag):
         (cx + half, cy - half, 0.0),   # bottom-right
         (cx - half, cy - half, 0.0),   # bottom-left
     ]
+
+
+def render_board_texture(px_per_meter: int = 1000):
+    """
+    Render the whole board (all 5 tags, correctly sized and positioned) as one BGR
+    image, 1 pixel = 1/px_per_meter metres. Single source of truth for the board's
+    visual appearance -- sim/synthetic_camera.py's SyntheticSource and the Gazebo board
+    model's texture (sim/gazebo_models/precision_landing_board/) both render from this
+    same function/data, so there is exactly one place tag placement math lives.
+
+    Board frame here matches the rest of this module: +X = right, +Y = forward/up in
+    the rendered image (so image row 0 is +Y, needing a y-flip when placing tags, same
+    as the flip already used before this was extracted).
+    """
+    import cv2
+    import numpy as np
+
+    tex_size = int(BOARD_SIZE_M * px_per_meter)
+    texture = np.ones((tex_size, tex_size, 3), dtype=np.uint8) * 255
+
+    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+
+    for tag_id, tag in TAGS.items():
+        size_px = int(tag.size_m * px_per_meter)
+        marker_img = cv2.aruco.generateImageMarker(dictionary, tag.id, size_px)
+        marker_img_bgr = cv2.cvtColor(marker_img, cv2.COLOR_GRAY2BGR)
+
+        cx = tex_size / 2.0 + tag.offset_x_m * px_per_meter
+        cy = tex_size / 2.0 - tag.offset_y_m * px_per_meter  # -Y: image row increases downward
+
+        x1 = int(cx - size_px / 2.0)
+        y1 = int(cy - size_px / 2.0)
+        x2 = x1 + size_px
+        y2 = y1 + size_px
+
+        texture[y1:y2, x1:x2] = marker_img_bgr
+
+    return texture

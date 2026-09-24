@@ -37,11 +37,32 @@ if [ -z "${GCS_IP:-}" ]; then
     exit 1
 fi
 
+# On a machine with a real desktop (e.g. the Mac Mini), run with the GUI on the real
+# GPU as before. On a headless box with no DISPLAY (e.g. the Parallels Ubuntu VM), fall
+# back to a virtual X server (Xvfb) + forced software rendering + server-only mode (-s,
+# no GUI) instead of hard-refusing -- this VM's Ogre2 + virtio-gpu/virgl combo actually
+# CRASHES (Ogre::UnimplementedException in GL3PlusTextureGpu::copyTo, hit generating
+# hardware mipmaps for ANY textured camera sensor -- confirmed 2026-09-24 not specific to
+# our own board model, the plugin's own stock iris_runway.sdf crashes the same way) when
+# Ogre2 falls back to its EGL headless-device path on its own; giving it a real (virtual)
+# GLX context via Xvfb avoids that code path entirely and camera sensors render
+# correctly. LIBGL_ALWAYS_SOFTWARE=1 alone, without Xvfb, is NOT sufficient by itself --
+# docs/07-sim-setup.md's earlier note that it was "the fix" was verified only against
+# physics, never against an actual camera sensor.
+HEADLESS_GAZEBO_ARGS=()
 if [ -z "${DISPLAY:-}" ]; then
-    echo "DISPLAY is not set -- this needs to run from a real graphical terminal session" >&2
-    echo "on this machine (not a bare non-interactive SSH command), so Gazebo's GUI has" >&2
-    echo "somewhere to render. Open a terminal on this machine's own desktop and retry." >&2
-    exit 1
+    if command -v xvfb-run >/dev/null 2>&1; then
+        echo "DISPLAY is not set -- no GUI available here, using Xvfb + forced software" >&2
+        echo "rendering + server-only mode instead (found 2026-09-24 on the Parallels VM)." >&2
+        export LIBGL_ALWAYS_SOFTWARE=1
+        HEADLESS_GAZEBO_ARGS=(-s)
+        USE_XVFB=1
+    else
+        echo "DISPLAY is not set and xvfb-run isn't installed -- either run this from a" >&2
+        echo "real graphical terminal session on this machine, or:" >&2
+        echo "  sudo apt-get install -y xvfb" >&2
+        exit 1
+    fi
 fi
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -92,10 +113,21 @@ source "$VENV/bin/activate"
 set -u
 
 export GZ_SIM_SYSTEM_PLUGIN_PATH="$AP_GZ/build:${GZ_SIM_SYSTEM_PLUGIN_PATH:-}"
-export GZ_SIM_RESOURCE_PATH="$AP_GZ/models:$AP_GZ/worlds:${GZ_SIM_RESOURCE_PATH:-}"
+# This repo's own models/worlds (sim/gazebo_models, sim/gazebo_worlds) come first, so
+# our own precision_landing_board / iris_downward_camera are found ahead of anything
+# same-named in the plugin's own resource dirs.
+export GZ_SIM_RESOURCE_PATH="$HERE/gazebo_models:$HERE/gazebo_worlds:$AP_GZ/models:$AP_GZ/worlds:${GZ_SIM_RESOURCE_PATH:-}"
 
-GZ_WORLD="${GZ_WORLD:-iris_runway.sdf}"
+# Headless (Xvfb) machines default to the lightweight VM world (trimmed rendering
+# cost only -- physics/mass/collisions unchanged, see that file's own header) instead of
+# the full-quality one, unless GZ_WORLD is explicitly set to override this.
+if [ "${USE_XVFB:-0}" = "1" ]; then
+    GZ_WORLD="${GZ_WORLD:-precision_landing_world_vm.sdf}"
+else
+    GZ_WORLD="${GZ_WORLD:-precision_landing_world.sdf}"
+fi
 OUT_PORT="${OUT_PORT:-14550}"
+COMPANION_PORT="${COMPANION_PORT:-14540}"
 
 echo "ArduPilot:       $AP"
 echo "ardupilot_gazebo: $AP_GZ"
@@ -103,10 +135,15 @@ echo "World:           $GZ_WORLD"
 echo "GCS (remote):    udp:${GCS_IP}:${OUT_PORT} (e.g. QGroundControl on Hari's Mac)"
 echo "GCS (local):     udp:127.0.0.1:${OUT_PORT} (QGroundControl or MAVProxy's own"
 echo "                 console/map, running on this same machine)"
+echo "Companion port:  UDP $COMPANION_PORT (sim/run_landing.py connects here)"
 echo ""
 
 echo "Starting Gazebo ($GZ_WORLD) ..."
-gz sim -v4 -r "$GZ_WORLD" &
+if [ "${USE_XVFB:-0}" = "1" ]; then
+    xvfb-run -a --server-args='-screen 0 1024x768x24' gz sim -v4 -r "${HEADLESS_GAZEBO_ARGS[@]}" "$GZ_WORLD" &
+else
+    gz sim -v4 -r "${HEADLESS_GAZEBO_ARGS[@]}" "$GZ_WORLD" &
+fi
 GZ_PID=$!
 trap 'kill $GZ_PID 2>/dev/null || true' EXIT
 
@@ -135,10 +172,20 @@ fi
 # "external" (JSON/Gazebo) frames -- a real gap in this ArduPilot version's sim_vehicle.py,
 # found and worked around 2026-09-22. Without this, FRAME_CLASS/FRAME_TYPE stay unset and
 # arming fails with "PreArm: Motors: Check frame class and type" / "Frame: UNSUPPORTED".
+# --console opens MAVProxy's own Tk/wx GUI status window -- skip it under Xvfb/headless
+# (same "no display" problem gz-sim itself hit above). The actual MAVProxy command
+# prompt (wp load, mode LAND, etc.) is on this terminal's stdin/stdout regardless of
+# --console, so nothing interactive is lost by skipping it.
+MAVPROXY_CONSOLE_ARGS=(--console)
+if [ "${USE_XVFB:-0}" = "1" ]; then
+    MAVPROXY_CONSOLE_ARGS=()
+fi
+
 exec Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON \
     --add-param-file="$AP/Tools/autotest/default_params/copter.parm" \
     --add-param-file="$AP/Tools/autotest/default_params/gazebo-iris.parm" \
     --out="udp:${GCS_IP}:${OUT_PORT}" \
+    --out="udp:127.0.0.1:${COMPANION_PORT}" \
     "${LOCAL_OUT_ARGS[@]}" \
-    --console \
+    "${MAVPROXY_CONSOLE_ARGS[@]}" \
     "$@"

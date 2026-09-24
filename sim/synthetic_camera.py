@@ -11,7 +11,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.frame_source import BaseFrameSource
-from sim.board import TAGS, TAG_FAMILY
+from sim.board import BOARD_SIZE_M, render_board_texture
 
 class SyntheticSource(BaseFrameSource):
     def __init__(self, connection="udpin:0.0.0.0:14540", target_pos_ned=(0, 0, 0), own_connection=True):
@@ -59,36 +59,20 @@ class SyntheticSource(BaseFrameSource):
         self._build_board_texture()
         
     def _build_board_texture(self):
-        """Builds a high-res 2D image of the board."""
-        # 1 pixel = 1 mm. Board is 600x600 mm
-        self.tex_size = 600
-        self.texture = np.ones((self.tex_size, self.tex_size, 3), dtype=np.uint8) * 255
-        
-        dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
-        
-        for tag_id, tag in TAGS.items():
-            # Generate marker image
-            size_px = int(tag.size_m * 1000)
-            marker_img = cv2.aruco.generateImageMarker(dictionary, tag.id, size_px)
-            marker_img_bgr = cv2.cvtColor(marker_img, cv2.COLOR_GRAY2BGR)
-            
-            # Calculate top-left position in the texture
-            # Center of the texture is (300, 300)
-            # board frame: +X is right, +Y is forward (up in image)
-            cx = self.tex_size / 2.0 + tag.offset_x_m * 1000.0
-            cy = self.tex_size / 2.0 - tag.offset_y_m * 1000.0 # -Y because image Y is down
-            
-            x1 = int(cx - size_px / 2.0)
-            y1 = int(cy - size_px / 2.0)
-            x2 = x1 + size_px
-            y2 = y1 + size_px
-            
-            self.texture[y1:y2, x1:x2] = marker_img_bgr
-            
+        """Builds a high-res 2D image of the board. 1 pixel = 1 mm, board is 600x600 mm.
+
+        Rendering itself lives in sim/board.py's render_board_texture() -- the single
+        source of truth also used to generate the Gazebo board model's texture
+        (sim/gazebo_models/precision_landing_board/), so tag placement math exists in
+        exactly one place.
+        """
+        self.tex_size = int(BOARD_SIZE_M * 1000)
+        self.texture = render_board_texture(px_per_meter=1000)
+
         # The corners of the board in the WORLD frame (assuming board is at target_pos_ned)
         # Board +X is right (East), +Y is forward (North)
         # Let's say the board is flat on the ground.
-        half = 0.3 # 30 cm
+        half = BOARD_SIZE_M / 2.0
         # Top-left (North-West)
         self.board_corners_3d = np.array([
             [self.target_pos_ned[0] + half, self.target_pos_ned[1] - half, self.target_pos_ned[2]], # TL (NW)

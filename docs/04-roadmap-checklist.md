@@ -79,11 +79,14 @@ ahead of time. The shape of it, matching what worked before conceptually:
 Same goal as before, same perception spec (`docs/01-inherited-system.md` §3), new autopilot
 underneath.
 
-- [ ] Represent the multi-scale AprilTag board (24 cm tag36h11 ID 0 centre + four 8 cm
-      IDs 1–4 at ±0.22 m on a 60 cm board) in the Gazebo world — **not done yet**; a
-      synthetic-camera stand-in (`sim/board.py` + `sim/synthetic_camera.py`) was built and
-      used instead, per the sim-first staging (Gazebo isn't set up in this repo yet). This
-      item is still open when Gazebo work actually starts.
+- [x] Represent the multi-scale AprilTag board (24 cm tag36h11 ID 0 centre + four 8 cm
+      IDs 1–4 at ±0.22 m on a 60 cm board) in the Gazebo world — **done 2026-09-23**
+      (`sim/gazebo_models/precision_landing_board/`, textured from `sim/board.py`'s own
+      `render_board_texture()`, same tag-placement code the synthetic-camera stand-in
+      already used) plus a real downward camera (`sim/gazebo_models/
+      iris_downward_camera/`) and `src/gazebo_source.py` reading it via `gz-transport`.
+      See `docs/07-sim-setup.md` Stage 3 for the four real bugs found getting this to
+      actually correct a landing, not just render.
 - [x] A downward camera feeding **a swappable frame-source interface**
       (`src/frame_source.py`) — built first, so the same detection code will run against
       Gazebo or real hardware unchanged later. Currently fed by the synthetic-camera stand-in
@@ -105,9 +108,15 @@ underneath.
       clean touchdown and disarm (`0.50 m/s` impact). One known gap: target briefly lost
       right near touchdown, likely the synthetic camera's fixed FOV vs. the physically
       large tag at very close range — didn't prevent a clean landing this run, but worth
-      tightening before treating close-range behavior as proven. **Caveat: this is the
-      synthetic-camera stand-in, not Gazebo** — re-verify once Gazebo replaces it (first
-      checklist item above)
+      tightening before treating close-range behavior as proven. **Caveat: this was the
+      synthetic-camera stand-in, not Gazebo** — Gazebo now exists (checklist item above),
+      and `sim/test_mission_precision.waypoints` (a 1m GPS-offset landing point, to prove
+      vision correction rather than GPS put it on the tag) is the actual re-verification
+      test, but a fully successful corrected landing on real Gazebo imagery is **not yet
+      confirmed** as of 2026-09-24 — three real bugs blocking it were found and fixed
+      (missing companion port, wrong camera FOV, wrong MAVLink timestamp, stale cached
+      frame — see `docs/07-sim-setup.md`) but the mission hasn't been re-run end-to-end
+      since the last fix. This is the next thing to actually confirm, not "done."
 - [ ] Scripted N-landing campaign from randomised offsets → touchdown error, time-to-land,
       abort count
 - [ ] Descent-response tuning sweep — start from `PLND_ACC_P_NSE` (senior's #1 tuning

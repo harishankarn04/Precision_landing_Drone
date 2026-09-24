@@ -1,0 +1,43 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="precision_landing_board">
+    <!--
+      Our own multi-scale AprilTag board (thesis Table 3.2, sim/board.py): 24cm centre
+      tag (ID 0) + four 8cm corner tags (IDs 1-4) at +-0.22m, on a 0.6m x 0.6m board.
+      Structure mirrors Documentation/nanda_lora_px4_reference's apriltag_pad/model.sdf
+      (a single static box + one PBR albedo_map texture) -- the only change needed is
+      generating our own composite texture (materials/textures/board.png, from
+      generate_texture.py, which itself calls sim/board.py's render_board_texture() --
+      the single source of truth for tag placement, shared with the synthetic camera).
+    -->
+    <static>true</static>
+    <link name="link">
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>0.6 0.6 0.01</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+          <pbr>
+            <metal>
+              <albedo_map>model://precision_landing_board/materials/textures/board.png</albedo_map>
+              <roughness>1.0</roughness>
+              <metalness>0.0</metalness>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>0.6 0.6 0.01</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

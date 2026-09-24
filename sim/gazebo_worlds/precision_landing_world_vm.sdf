@@ -1,0 +1,158 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <world name="precision_landing_world">
+    <!--
+      VM-only lightweight variant of ../precision_landing_world.sdf, for the Parallels
+      Ubuntu VM's software-rendered (Xvfb + swrast) Gazebo (found 2026-09-24). ONLY
+      rendering cost is trimmed here -- <physics> (gravity, timestep) and every model's
+      mass/inertia/collision are byte-for-byte identical to the real world, so weight and
+      any wind effects behave the same. What's different:
+        - model://runway (heavy: airfield.dae mesh + 4x 2K PBR texture maps, for a
+          collision that was ALWAYS just a flat plane anyway -- checked by reading
+          runway's own model.sdf) swapped for model://lite_ground (same flat-plane
+          collision, no textured mesh visual).
+        - iris_downward_camera -> iris_downward_camera_vm: same camera resolution/FOV
+          (so src/gazebo_source.py's camera_matrix math needs zero changes), just
+          15Hz render rate instead of 30Hz.
+        - sun light's cast_shadows: false (shadow-map rendering is pure CPU cost here,
+          and shadows on the board's own texture would only add detection noise, not
+          help it).
+      Not used by run_gazebo.sh on a machine with a real DISPLAY (Mac Mini keeps the
+      full-quality world, real GPU, no reason to trade quality away there).
+    -->
+    <physics name="1ms" type="ignore">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system"
+      name="gz::sim::systems::Physics">
+    </plugin>
+    <plugin
+      filename="gz-sim-sensors-system"
+      name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-user-commands-system"
+      name="gz::sim::systems::UserCommands">
+    </plugin>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+      name="gz::sim::systems::SceneBroadcaster">
+    </plugin>
+    <plugin filename="gz-sim-imu-system"
+      name="gz::sim::systems::Imu">
+    </plugin>
+    <plugin filename="gz-sim-navsat-system"
+      name="gz::sim::systems::NavSat">
+    </plugin>
+
+    <scene>
+      <ambient>1.0 1.0 1.0</ambient>
+      <background>0.8 0.8 0.8</background>
+      <sky></sky>
+    </scene>
+
+    <spherical_coordinates>
+      <latitude_deg>-35.363262</latitude_deg>
+      <longitude_deg>149.165237</longitude_deg>
+      <elevation>584</elevation>
+      <heading_deg>0</heading_deg>
+      <surface_model>EARTH_WGS84</surface_model>
+    </spherical_coordinates>
+
+    <light type="directional" name="sun">
+      <cast_shadows>false</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.8 0.8 0.8 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="axes">
+      <static>1</static>
+      <link name="link">
+        <visual name="r">
+          <cast_shadows>0</cast_shadows>
+          <pose>5 0 0.1 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>10 0.01 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 0.8</ambient>
+            <diffuse>1 0 0 0.8</diffuse>
+            <emissive>1 0 0 0.8</emissive>
+            <specular>0.5 0.5 0.5 0.8</specular>
+          </material>
+        </visual>
+        <visual name="g">
+          <cast_shadows>0</cast_shadows>
+          <pose>0 5 0.1 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 10 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0 1 0 0.8</ambient>
+            <diffuse>0 1 0 0.8</diffuse>
+            <emissive>0 1 0 0.8</emissive>
+            <specular>0.5 0.5 0.5 0.8</specular>
+          </material>
+        </visual>
+        <visual name="b">
+          <cast_shadows>0</cast_shadows>
+          <pose>0 0 5.1 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.01 10</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0 0 1 0.8</ambient>
+            <diffuse>0 0 1 0.8</diffuse>
+            <emissive>0 0 1 0.8</emissive>
+            <specular>0.5 0.5 0.5 0.8</specular>
+          </material>
+        </visual>
+        <sensor name="navsat_sensor" type="navsat">
+          <always_on>1</always_on>
+          <update_rate>1</update_rate>
+        </sensor>
+      </link>
+    </model>
+
+    <include>
+      <uri>model://lite_ground</uri>
+    </include>
+
+    <!--
+      Our multi-scale AprilTag board, centred at the world origin -- matching the
+      target_pos_ned=(0,0,0) assumption already used throughout
+      sim/synthetic_camera.py/sim/run_landing.py, so nothing downstream needs to change
+      its position assumptions when swapping from the synthetic camera to this world.
+      Z=0.005 so the board's 0.01m-thick top surface sits at z=0.01, just above ground.
+    -->
+    <include>
+      <uri>model://precision_landing_board</uri>
+      <pose>0 0 0.005 0 0 0</pose>
+    </include>
+
+    <!--
+      VM-only lighter camera variant (see model.sdf) instead of iris_downward_camera --
+      same spawn pose as the full-quality world.
+    -->
+    <include>
+      <uri>model://iris_downward_camera_vm</uri>
+      <pose degrees="true">0 0 0.195 0 0 90</pose>
+    </include>
+
+  </world>
+</sdf>

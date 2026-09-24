@@ -60,6 +60,22 @@ PLND_TIMEOUT     4    # ArduPilot's own default -- seconds to keep descending af
 PLND_RET_BEHAVE  0    # 0 = climb back to the last known target location (not just an
                       # approximate one) -- ArduPilot's own default
 
+# CRITICAL, found 2026-09-24 by reading a real flight's dataflash log (00000026.BIN):
+# PLND_STRICT=1 alone did NOT make retry engage -- "PrecLand: Retrying" never printed
+# once in a ~24s continuous target-loss window, it just kept descending blind straight
+# into "PrecLand: Failsafe Measures". Root cause: AC_PrecLand::check_if_sensor_in_range()
+# treats the sensor as "out of range" whenever rangefinder_alt_valid is false UNLESS
+# BOTH PLND_ALT_MIN and PLND_ALT_MAX are zero -- and ArduPilot's own compiled-in
+# defaults for those (0.75, 8) are both nonzero. We have no rangefinder at all
+# (RNGFND1_TYPE unset), so rangefinder_alt_valid is always false, which silently forces
+# every single target loss straight to TARGET_OUT_OF_RANGE/TARGET_NEVER_SEEN --
+# completely bypassing get_target_lost_actions()/retry_landing() regardless of
+# PLND_STRICT. Setting both to 0 makes check_if_sensor_in_range() take its own
+# "no limits specified, assume always in range" shortcut, which is the only way the
+# retry state machine can ever actually run without a rangefinder.
+PLND_ALT_MIN     0
+PLND_ALT_MAX     0
+
 # Descent-response tuning, 2026-09-18. A live run landed 0.70m off centre with the
 # fused position drifting during descent. Root-caused via an offline replay of the
 # actual flight's true (perfectly synchronised) attitude+position through our own

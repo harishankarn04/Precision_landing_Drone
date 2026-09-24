@@ -1,4 +1,5 @@
 import time
+import csv
 import cv2
 import sys
 import os
@@ -46,7 +47,29 @@ def main():
                               "centered and near the ground for the final disarm. Vehicle "
                               "must already be armed and in GUIDED mode, airborne, before "
                               "starting this script in --control guided.")
+    parser.add_argument("--log-file", type=str, default=None,
+                         help="CSV path to log every frame's outcome (elapsed_s, event, "
+                              "body_x, body_y, dist, tags_used) -- this is the ONLY record "
+                              "of what the vision pipeline actually saw once the terminal "
+                              "closes; the console print above is throttled to 2/sec for "
+                              "readability and doesn't survive the session. Default: "
+                              "logs/vision_<timestamp>.csv (found needed 2026-09-24, "
+                              "diagnosing a run after the terminal was already gone --"
+                              "had to reconstruct events from ArduPilot's own dataflash log "
+                              "instead of this script's own data).")
     args = parser.parse_args()
+
+    log_path = args.log_file or os.path.join(
+        os.path.dirname(__file__), "..", "logs",
+        f"vision_{time.strftime('%Y%m%d_%H%M%S')}.csv"
+    )
+    os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
+    log_file = open(log_path, "w", newline="", buffering=1)  # line-buffered -- survives a
+    # crash/kill instead of losing whatever's still sitting in an OS-level write buffer
+    log_writer = csv.writer(log_file)
+    log_writer.writerow(["elapsed_s", "event", "body_x", "body_y", "dist", "tags_used"])
+    log_start_t = time.time()
+    print(f"Logging every frame to {log_path}")
 
     print(f"Connecting to SITL companion link on {args.companion_port}...")
     # One shared MAVLink connection for both reading pose (SyntheticSource) and sending
@@ -129,12 +152,16 @@ def main():
                     print(f"Sent TARGET: X={fused['body_x']:.2f}, Y={fused['body_y']:.2f}, Z={fused['dist']:.2f}, tags={fused['tags_used']}")
                     last_print_t = start_t
                 had_target = True
+                log_writer.writerow([f"{start_t - log_start_t:.3f}", "target",
+                                      f"{fused['body_x']:.3f}", f"{fused['body_y']:.3f}",
+                                      f"{fused['dist']:.3f}", fused['tags_used']])
             else:
                 if args.control == "guided":
                     actuator.on_target_lost()
                 if had_target:
                     print("Target lost")
                 had_target = False
+                log_writer.writerow([f"{start_t - log_start_t:.3f}", "lost", "", "", "", ""])
 
             if not args.no_gui:
                 fps = 1.0 / (time.time() - start_t)
@@ -151,6 +178,8 @@ def main():
             actuator.close()
         if not args.no_gui:
             cv2.destroyAllWindows()
+        log_file.close()
+        print(f"Log written to {log_path}")
 
 if __name__ == "__main__":
     main()

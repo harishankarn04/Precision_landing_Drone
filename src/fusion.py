@@ -5,7 +5,8 @@ from typing import Dict, Any, List, Optional
 from sim.board import TAGS
 
 class TagFusion:
-    def __init__(self, disagreement_threshold_m=0.15, loss_debounce_s=0.5):
+    def __init__(self, disagreement_threshold_m=0.15, loss_debounce_s=0.5,
+                 max_jump_xy_m=0.30, max_jump_alt_m=0.40):
         """
         loss_debounce_s: coast on the last good fused result for up to this many
         seconds of missed frames before actually reporting the target as lost --
@@ -15,9 +16,24 @@ class TagFusion:
         5-8m") and found that reacting to every single miss as "lost" caused far more
         disruption than the flicker itself. Found 2026-09-24 after a live Gazebo test
         showed correction starting then stalling/losing the target mid-descent.
+
+        max_jump_xy_m/max_jump_alt_m: CLAUDE.md section 7 item 8's "vibration jump
+        filter", never actually implemented until now -- found needed 2026-09-24 by
+        reading a real vision log (logs/vision_20260924_173419.csv): as altitude
+        dropped from 2.8m to 1.3m, single-tag body_x/body_y swung by up to ~0.5m
+        between CONSECUTIVE real camera frames (33ms apart) -- physically impossible
+        drone motion, genuine pose-estimation noise being chased as if it were real,
+        which is what "kept overcorrecting, spinning out" actually was. A rejected
+        jump coasts on the last accepted value (same as a miss) rather than being
+        treated as invalid outright, and stops being enforced once the last accepted
+        value itself is more than loss_debounce_s old -- reusing that same clock so a
+        persistent real change still gets through within half a second, it isn't
+        rejected forever.
         """
         self.disagreement_threshold_m = disagreement_threshold_m
         self.loss_debounce_s = loss_debounce_s
+        self.max_jump_xy_m = max_jump_xy_m
+        self.max_jump_alt_m = max_jump_alt_m
         self._last_good = None
         self._last_good_t = 0.0
 
@@ -46,6 +62,18 @@ class TagFusion:
         fresh = self._compute_fresh(results, corners, ids, image_shape)
         now = time.time()
         if fresh is not None:
+            last = self._last_good
+            if last is not None and (now - self._last_good_t) <= self.loss_debounce_s:
+                xy_jump = float(np.hypot(fresh['body_x'] - last['body_x'],
+                                          fresh['body_y'] - last['body_y']))
+                alt_jump = abs(fresh['dist'] - last['dist'])
+                if xy_jump > self.max_jump_xy_m or alt_jump > self.max_jump_alt_m:
+                    # Reject as noise, coast on the last accepted value -- deliberately
+                    # NOT refreshing _last_good_t, so a persistent (not just
+                    # single-frame) change still gets through once the last accepted
+                    # value ages past loss_debounce_s, rather than being rejected
+                    # forever.
+                    return last
             self._last_good = fresh
             self._last_good_t = now
             return fresh
@@ -80,8 +108,17 @@ class TagFusion:
             x_max, y_max = tag_corners[:, 0].max(), tag_corners[:, 1].max()
             
             edge_distance = min(x_min, y_min, w - x_max, h - y_max)
-            edge_safe = edge_distance > margin
-            
+            if edge_distance <= margin:
+                # A corner this close to the frame boundary is an incomplete/unreliable
+                # measurement -- reject outright rather than merely downweight. With
+                # only the single center tag detected most of the time (the 4 corner
+                # tags are usually too small to decode), downweighting was a no-op: a
+                # weighted average of exactly one item is that item regardless of its
+                # weight, so an edge-clipped single-tag reading was trusted exactly as
+                # much as a clean one. Found 2026-09-24 alongside the jump-filter fix
+                # above -- same live-log evidence.
+                continue
+
             # offset vector from landing center TO tag, in board plane
             offset_in_tag_frame = np.array([tag.offset_x_m, tag.offset_y_m, 0.0], dtype=float)
             
@@ -99,12 +136,8 @@ class TagFusion:
             )
             
             pixel_area = cv2.contourArea(tag_corners)
-            
-            # Weights
-            area_weight = np.sqrt(pixel_area)
-            edge_weight = 1.0 if edge_safe else 0.3
-            weight = area_weight * edge_weight
-            
+            weight = np.sqrt(pixel_area)  # larger (closer/bigger-in-frame) tags trusted more
+
             valid.append({
                 'id': tag_id,
                 'body_x': body_x,

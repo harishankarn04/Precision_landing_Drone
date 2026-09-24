@@ -89,7 +89,7 @@ PLND_ALT_MAX     0
 # here only as a record of the earlier tuning attempt, not because it does anything.
 PLND_ACC_P_NSE   1.25
 
-# WPNAV_ACCEL, found 2026-09-24 by correlating a live flight's own dataflash log
+# WP_ACC, found 2026-09-24 by correlating a live flight's own dataflash log
 # (00000028.BIN) against its vision log (logs/vision_20260924_174608.csv): the tag was
 # only ever tracked in short 2-4s bursts before being lost again, repeatedly ("PrecLand:
 # Target Found" -> "Target Lost" every 2.4-4.3s across the whole flight), and the fused
@@ -99,10 +99,18 @@ PLND_ACC_P_NSE   1.25
 # the camera's already-narrow ~66deg FOV off-axis -- an aggressive correction can push
 # the tag straight out of frame before it converges, which is exactly the repeating
 # find/lose pattern in the log. mode_land.cpp confirms LAND's horizontal correction uses
-# wp_nav->get_wp_acceleration_mss(), i.e. this param -- lowered from ArduPilot's own
-# default (250 cm/s^2 = 2.5 m/s^2) to reduce tilt during correction, trading speed for
-# keeping the tag in view long enough to actually converge. Not yet re-validated live.
-WPNAV_ACCEL      100
+# wp_nav->get_wp_acceleration_mss(), backed by this param.
+#
+# CORRECTION 2026-09-24, after 4 retests with -w still showed zero effect: the name
+# "WPNAV_ACCEL" is WRONG for this ArduPilot version (V4.8.0-dev) -- confirmed by reading
+# AC_WPNav.cpp/Parameters.cpp directly. The group is registered with prefix "WP_"
+# (GOBJECTPTR(wp_nav, "WP_", AC_WPNav)) and the field is AP_GROUPINFO("ACC", ...,
+# _wp_accel_mss, ...) -- i.e. the real current name is WP_ACC, and it's already in
+# m/s^2 directly (default WPNAV_ACCELERATION_MS=2.5), not cm/s^2. "WPNAV_ACCEL" doesn't
+# exist under this name any more, so every prior test's --add-param-file silently
+# ignored it entirely -- nothing to do with EEPROM staleness, a wrong parameter name
+# the whole time. Not yet re-validated live with the corrected name.
+WP_ACC           1.0
 
 # Camera-to-CG mounting offset. Left at zero because the synthetic camera has no
 # physical offset to model (unlike CLAUDE.md section 8's PLND_CAM_POS_Z=-0.05 for the
